@@ -166,12 +166,56 @@ class AnalistaRiesgoAgent:
         report: RiskReport
     ) -> None:
         """Analiza riesgos éticos (RE)"""
-        # Placeholder - en producción incluiría detección más sofisticada
         traces = trace_sequence.traces
-
-        # RE1: Uso no declarado de IA
-        # Este requeriría comparación con entregas vs. trazas
-        pass
+        
+        # RE1: Código sospechoso (tiempo < 5s y longitud > 100 chars)
+        # Buscar pares de prompts y respuestas rápidas con código largo
+        for i, trace in enumerate(traces):
+            if trace.interaction_type == InteractionType.STUDENT_PROMPT and i + 1 < len(traces):
+                next_trace = traces[i + 1]
+                
+                # Si la siguiente traza es una respuesta/código del estudiante
+                if next_trace.student_id == trace.student_id and \
+                   next_trace.interaction_type in [InteractionType.STUDENT_CODE_SUBMISSION, InteractionType.STUDENT_PROMPT]:
+                    
+                    # Calcular tiempo entre trazas
+                    time_diff = (next_trace.timestamp - trace.timestamp).total_seconds()
+                    
+                    # Verificar si es código (contiene palabras clave de programación)
+                    is_code = self._looks_like_code(next_trace.content)
+                    code_length = len(next_trace.content)
+                    
+                    # Detectar código sospechoso: tiempo < 5s y longitud > 100 chars
+                    if time_diff < 5 and code_length > 100 and is_code:
+                        risk = Risk(
+                            id=f"risk_eth_suspicious_code_{trace_sequence.id}_{i}",
+                            session_id=trace_sequence.session_id,
+                            student_id=trace_sequence.student_id,
+                            activity_id=trace_sequence.activity_id,
+                            risk_type=RiskType.ACADEMIC_DISHONESTY,
+                            risk_level=RiskLevel.HIGH,
+                            dimension=RiskDimension.ETHICAL,
+                            description=(
+                                f"Código sospechoso detectado: {code_length} caracteres "
+                                f"enviados en {time_diff:.1f} segundos (< 5s). "
+                                "Posible copia de fuente externa."
+                            ),
+                            evidence=[
+                                f"Prompt: {trace.content[:100]}...",
+                                f"Código: {next_trace.content[:100]}..."
+                            ],
+                            trace_ids=[trace.id, next_trace.id],
+                            root_cause="Tiempo de respuesta incompatible con escritura humana de código",
+                            recommendations=[
+                                "Revisar fuente del código enviado",
+                                "Solicitar explicación detallada del código",
+                                "Considerar entrevista presencial para verificar comprensión"
+                            ],
+                            pedagogical_intervention=(
+                                "Solicitar que explique línea por línea el código enviado"
+                            )
+                        )
+                        report.add_risk(risk)
 
     def _analyze_epistemic_risks(
         self,
@@ -243,6 +287,19 @@ class AnalistaRiesgoAgent:
             "haceme"
         ]
         return any(signal in content.lower() for signal in delegation_signals)
+
+    def _looks_like_code(self, content: str) -> bool:
+        """Detecta si el contenido parece ser código de programación"""
+        code_indicators = [
+            "def ", "class ", "function ", "return ", "import ",
+            "if ", "else:", "for ", "while ", "{", "}", 
+            "var ", "const ", "let ", "=>", "public ", "private ",
+            "#include", "void ", "int ", "string "
+        ]
+        content_lower = content.lower()
+        # Considerar código si tiene al menos 2 indicadores
+        matches = sum(1 for indicator in code_indicators if indicator.lower() in content_lower)
+        return matches >= 2
 
     def _count_delegation_attempts(self, traces: List[CognitiveTrace]) -> int:
         """Cuenta intentos de delegación"""

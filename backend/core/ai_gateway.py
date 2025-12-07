@@ -20,6 +20,7 @@ from ..models.risk import Risk, RiskType, RiskLevel, RiskDimension, RiskReport
 from ..models.evaluation import EvaluationReport
 from ..llm import LLMProviderFactory, LLMProvider, LLMMessage, LLMRole
 from .cache import LLMResponseCache
+from ..agents.governance import GobernanzaAgent
 
 # Prometheus metrics instrumentation (HIGH-01)
 # Lazy import to avoid circular dependency with api.monitoring
@@ -110,6 +111,9 @@ class AIGateway:
         else:
             # Backward compatibility
             self.cognitive_engine = CognitiveReasoningEngine(self.config)
+        
+        # C4: Agente de Gobernanza - Instanciar para filtrado PII
+        self.governance_agent = GobernanzaAgent(llm_provider=None, config=self.config)
 
         # Repositorios inyectados (opcional para backward compatibility)
         self.session_repo = session_repo
@@ -212,6 +216,16 @@ class AIGateway:
         """
         # ✅ VALIDACIÓN: Validar entrada antes de procesar
         self._validate_interaction_input(session_id, prompt, context)
+        
+        # ✅ GOBERNANZA: Filtrar PII del prompt antes de procesarlo
+        sanitized_prompt, pii_detected = self.governance_agent.sanitize_prompt(prompt)
+        if pii_detected:
+            logger.warning(
+                f"PII detectado y removido del prompt",
+                extra={"session_id": session_id, "original_length": len(prompt)}
+            )
+            # Usar el prompt sanitizado para el resto del procesamiento
+            prompt = sanitized_prompt
 
         # ✅ STATELESS: Obtener sesión desde BD (no desde self.active_sessions)
         if self.session_repo is not None:

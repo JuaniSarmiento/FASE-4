@@ -692,3 +692,16 @@ async def export_activity_data(
                 "Content-Disposition": f"attachment; filename={filename}",
             },
         )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "Activity export failed",
+            exc_info=True,
+            extra={"activity_id": activity_id},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Export failed: {str(e)}",
+        )

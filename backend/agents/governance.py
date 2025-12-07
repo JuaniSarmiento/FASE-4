@@ -6,6 +6,7 @@ Operacionaliza la gobernanza institucional de IA generativa
 from typing import Optional, Dict, Any, List
 from enum import Enum
 from datetime import datetime
+import re
 
 
 class PolicyLevel(str, Enum):
@@ -57,6 +58,49 @@ class GobernanzaAgent:
         # Cargar políticas del config
         if config and "policies" in config:
             self.policies.update(config["policies"])
+        
+        # Patrones regex para detectar PII (Información Personal Identificable)
+        self.pii_patterns = {
+            "email": re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
+            "dni": re.compile(r'\b\d{7,8}\b'),  # DNI argentino
+            "phone": re.compile(r'\b\d{2,4}[-.\s]?\d{4}[-.\s]?\d{4}\b'),  # Teléfono
+            "credit_card": re.compile(r'\b\d{4}[-.\s]?\d{4}[-.\s]?\d{4}[-.\s]?\d{4}\b'),
+        }
+
+    def sanitize_prompt(self, prompt: str) -> tuple[str, bool]:
+        """
+        Filtra PII (Información Personal Identificable) del prompt antes de enviarlo al LLM.
+        
+        Args:
+            prompt: Texto original del prompt
+            
+        Returns:
+            Tupla (prompt_sanitizado, pii_detectado)
+        """
+        sanitized = prompt
+        pii_found = False
+        
+        # Detectar y reemplazar emails
+        if self.pii_patterns["email"].search(sanitized):
+            sanitized = self.pii_patterns["email"].sub("[EMAIL_REDACTED]", sanitized)
+            pii_found = True
+            
+        # Detectar y reemplazar DNI
+        if self.pii_patterns["dni"].search(sanitized):
+            sanitized = self.pii_patterns["dni"].sub("[DNI_REDACTED]", sanitized)
+            pii_found = True
+            
+        # Detectar y reemplazar teléfonos
+        if self.pii_patterns["phone"].search(sanitized):
+            sanitized = self.pii_patterns["phone"].sub("[PHONE_REDACTED]", sanitized)
+            pii_found = True
+            
+        # Detectar y reemplazar tarjetas de crédito
+        if self.pii_patterns["credit_card"].search(sanitized):
+            sanitized = self.pii_patterns["credit_card"].sub("[CARD_REDACTED]", sanitized)
+            pii_found = True
+        
+        return sanitized, pii_found
 
     def verify_compliance(
         self,
