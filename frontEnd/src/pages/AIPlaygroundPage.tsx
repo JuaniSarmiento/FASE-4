@@ -1,0 +1,245 @@
+/**
+ * AI Playground - Página para probar el sistema completo
+ * Permite seleccionar rol, agente, y hacer preguntas a Phi-3 via Gateway
+ */
+import { useState } from 'react';
+import { sessionsService } from '@/services/api/sessions.service';
+import { interactionsService } from '@/services/api/interactions.service';
+import './AIPlaygroundPage.css';
+
+type UserRole = 'student' | 'teacher';
+type AgentType = 'TUTOR' | 'EVALUATOR' | 'SIMULATOR' | 'RISK_ANALYST';
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  agent?: string;
+}
+
+const AGENTS = [
+  { id: 'TUTOR', name: 'Tutor IA Cognitivo (T-IA-Cog)', description: 'Guía socrática y andamiaje' },
+  { id: 'EVALUATOR', name: 'Evaluador de Procesos (E-IA-Proc)', description: 'Analiza razonamiento cognitivo' },
+  { id: 'SIMULATOR', name: 'Simulador Profesional (S-IA-X)', description: 'Code review, entrevistas, debugging' },
+  { id: 'RISK_ANALYST', name: 'Analista de Riesgo (AR-IA)', description: 'Detecta riesgos cognitivos y éticos' },
+];
+
+export function AIPlaygroundPage() {
+  const [userRole, setUserRole] = useState<UserRole>('student');
+  const [selectedAgent, setSelectedAgent] = useState<AgentType>('TUTOR');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const startSession = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const response = await sessionsService.create({
+        student_id: userRole === 'student' ? 'demo_student_001' : 'demo_teacher_001',
+        activity_id: 'playground_demo',
+        mode: selectedAgent,
+        metadata: {
+          role: userRole,
+          playground: true,
+        },
+      });
+
+      setSessionId(response.id);
+      setMessages([{
+        id: 'welcome',
+        role: 'assistant',
+        content: `¡Sesión iniciada! Soy el **${AGENTS.find(a => a.id === selectedAgent)?.name}**. ¿En qué puedo ayudarte?`,
+        timestamp: new Date(),
+        agent: selectedAgent,
+      }]);
+    } catch (err: any) {
+      setError(err.message || 'Error al crear sesión');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!input.trim() || !sessionId || loading) return;
+
+    const userMessage: Message = {
+      id: `user_${Date.now()}`,
+      role: 'user',
+      content: input,
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await interactionsService.process({
+        session_id: sessionId,
+        prompt: input,
+        context: {
+          agent: selectedAgent,
+          role: userRole,
+        },
+      });
+
+      const assistantMessage: Message = {
+        id: response.id,
+        role: 'assistant',
+        content: response.response,
+        timestamp: new Date(response.timestamp),
+        agent: selectedAgent,
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (err: any) {
+      setError(err.message || 'Error al procesar interacción');
+      
+      // Mensaje de error en el chat
+      setMessages(prev => [...prev, {
+        id: `error_${Date.now()}`,
+        role: 'assistant',
+        content: `❌ Error: ${err.message}`,
+        timestamp: new Date(),
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  const resetSession = () => {
+    setSessionId(null);
+    setMessages([]);
+    setInput('');
+    setError(null);
+  };
+
+  return (
+    <div className="ai-playground">
+      <div className="playground-header">
+        <h1>🤖 AI Playground - Phoenix MVP</h1>
+        <p>Prueba el sistema completo: Gateway → Ollama → Phi-3</p>
+      </div>
+
+      {!sessionId ? (
+        <div className="setup-panel">
+          <div className="setup-card">
+            <h2>1. Selecciona tu rol</h2>
+            <div className="role-selector">
+              <button
+                className={`role-btn ${userRole === 'student' ? 'active' : ''}`}
+                onClick={() => setUserRole('student')}
+              >
+                👨‍🎓 Estudiante
+              </button>
+              <button
+                className={`role-btn ${userRole === 'teacher' ? 'active' : ''}`}
+                onClick={() => setUserRole('teacher')}
+              >
+                👩‍🏫 Profesor
+              </button>
+            </div>
+          </div>
+
+          <div className="setup-card">
+            <h2>2. Selecciona un agente</h2>
+            <div className="agent-selector">
+              {AGENTS.map(agent => (
+                <div
+                  key={agent.id}
+                  className={`agent-card ${selectedAgent === agent.id ? 'active' : ''}`}
+                  onClick={() => setSelectedAgent(agent.id as AgentType)}
+                >
+                  <h3>{agent.name}</h3>
+                  <p>{agent.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button
+            className="start-btn"
+            onClick={startSession}
+            disabled={loading}
+          >
+            {loading ? 'Iniciando...' : '🚀 Iniciar Sesión'}
+          </button>
+
+          {error && <div className="error-message">{error}</div>}
+        </div>
+      ) : (
+        <div className="chat-panel">
+          <div className="chat-header">
+            <div className="session-info">
+              <span className="badge role-badge">{userRole === 'student' ? '👨‍🎓 Estudiante' : '👩‍🏫 Profesor'}</span>
+              <span className="badge agent-badge">{AGENTS.find(a => a.id === selectedAgent)?.name}</span>
+              <span className="badge session-badge">Sesión: {sessionId.substring(0, 8)}</span>
+            </div>
+            <button className="reset-btn" onClick={resetSession}>
+              ↻ Nueva Sesión
+            </button>
+          </div>
+
+          <div className="messages-container">
+            {messages.map(msg => (
+              <div key={msg.id} className={`message ${msg.role}`}>
+                <div className="message-header">
+                  <span className="message-role">
+                    {msg.role === 'user' ? '👤 Tú' : '🤖 ' + (msg.agent || 'Asistente')}
+                  </span>
+                  <span className="message-time">
+                    {msg.timestamp.toLocaleTimeString()}
+                  </span>
+                </div>
+                <div className="message-content">{msg.content}</div>
+              </div>
+            ))}
+            {loading && (
+              <div className="message assistant loading">
+                <div className="message-content">
+                  <span className="typing-indicator">
+                    Phi-3 está pensando<span className="dots">...</span>
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="input-container">
+            <textarea
+              className="message-input"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Escribe tu pregunta aquí... (Enter para enviar, Shift+Enter para nueva línea)"
+              rows={3}
+              disabled={loading}
+            />
+            <button
+              className="send-btn"
+              onClick={sendMessage}
+              disabled={!input.trim() || loading}
+            >
+              {loading ? '⏳' : '📤'} Enviar
+            </button>
+          </div>
+
+          {error && <div className="error-message">{error}</div>}
+        </div>
+      )}
+    </div>
+  );
+}

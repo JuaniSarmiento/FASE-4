@@ -1,0 +1,120 @@
+.teacher-page {
+  min-height: 100vh;
+  background-color: #f5f7fa;
+}
+
+.teacher-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 2rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.teacher-header-content {
+  max-width: 1200px;
+  margin: 0 auto 1rem auto;
+}
+
+.teacher-header h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 2rem;
+}
+
+.teacher-header .subtitle {
+  margin: 0;
+  opacity: 0.9;
+  font-size: 1.1rem;
+}
+
+.teacher-actions {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.btn-create {
+  padding: 0.75rem 1.5rem;
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 2px solid white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.3s;
+  backdrop-filter: blur(10px);
+}
+
+.btn-create:hover {
+  background-color: white;
+  color: #667eea;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.teacher-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.3s;
+}
+
+.btn-primary {
+  background-color: #667eea;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #5568d3;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+  background-color: white;
+  color: #667eea;
+  border: 2px solid #667eea;
+}
+
+.btn-secondary:hover {
+  background-color: #f5f7fa;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .teacher-header {
+    padding: 1.5rem 1rem;
+  }
+
+  .teacher-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .teacher-header .subtitle {
+    font-size: 0.95rem;
+  }
+
+  .teacher-actions {
+    flex-direction: column;
+  }
+
+  .teacher-actions button {
+    width: 100%;
+  }
+
+  .teacher-content {
+    padding: 1rem;
+  }
+}
