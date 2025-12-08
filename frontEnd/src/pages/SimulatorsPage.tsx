@@ -1,243 +1,152 @@
-/**
- * Simulators Page - S-IA-X
- * 6 simuladores de roles profesionales
- */
-import React, { useState } from 'react';
-import { ChatBox, Message } from '@/components/Chat/ChatBox';
-import { sessionsService, interactionsService } from '@/services/api';
-import { SessionMode } from '@/types/api.types';
-import './SimulatorsPage.css';
+import { useState, useEffect } from 'react';
+import { apiClient } from '../services/apiClient';
 
-type SimulatorType = 'PO' | 'SM' | 'IT' | 'IR' | 'CX' | 'DSO';
+const simulators = [
+  { id: 'product_owner', name: 'Product Owner', icon: '📋', color: 'blue' },
+  { id: 'scrum_master', name: 'Scrum Master', icon: '🎯', color: 'green' },
+  { id: 'tech_interviewer', name: 'Tech Interviewer', icon: '💼', color: 'purple' },
+  { id: 'incident_responder', name: 'Incident Responder', icon: '🚨', color: 'red' },
+  { id: 'client', name: 'Cliente', icon: '👤', color: 'yellow' },
+  { id: 'devsecops', name: 'DevSecOps', icon: '🔒', color: 'indigo' },
+];
 
-interface Simulator {
-  id: SimulatorType;
-  name: string;
-  fullName: string;
-  icon: string;
-  color: string;
-  description: string;
-  skills: string[];
-  welcomeMessage: string;
-}
+export function SimulatorsPage() {
+  const [selectedSimulator, setSelectedSimulator] = useState<any>(null);
+  const [sessionId, setSessionId] = useState('');
+  const [messages, setMessages] = useState<Array<{role: string; content: string}>>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
 
-export const SimulatorsPage: React.FC = () => {
-  const [activeSimulator, setActiveSimulator] = useState<SimulatorType | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-
-  const simulators: Simulator[] = [
-    {
-      id: 'PO',
-      name: 'Product Owner',
-      fullName: 'PO-IA: Product Owner Virtual',
-      icon: '📋',
-      color: '#4ade80',
-      description: 'Gestión de producto y priorización de backlog',
-      skills: ['User Stories', 'Sprint Planning', 'Stakeholder Management'],
-      welcomeMessage: '¡Hola! Soy el Product Owner del equipo. ¿Qué funcionalidad necesitas implementar?',
-    },
-    {
-      id: 'SM',
-      name: 'Scrum Master',
-      fullName: 'SM-IA: Scrum Master Virtual',
-      icon: '🎯',
-      color: '#f59e0b',
-      description: 'Facilitación ágil y resolución de impedimentos',
-      skills: ['Sprint Ceremonies', 'Team Dynamics', 'Agile Coaching'],
-      welcomeMessage: '¡Bienvenido al sprint! Como Scrum Master, estoy aquí para ayudar al equipo.',
-    },
-    {
-      id: 'IT',
-      name: 'Tech Interviewer',
-      fullName: 'IT-IA: Entrevistador Técnico',
-      icon: '💼',
-      color: '#8b5cf6',
-      description: 'Entrevistas técnicas y evaluación de código',
-      skills: ['Coding Challenges', 'System Design', 'Behavioral Questions'],
-      welcomeMessage: 'Gracias por venir a la entrevista. Empecemos con algunas preguntas técnicas.',
-    },
-    {
-      id: 'IR',
-      name: 'Integration Reviewer',
-      fullName: 'IR-IA: Revisor de Integración',
-      icon: '🔍',
-      color: '#06b6d4',
-      description: 'Code review y análisis de pull requests',
-      skills: ['Code Quality', 'Best Practices', 'Architecture Review'],
-      welcomeMessage: 'Estoy revisando tu pull request. Veamos la calidad del código.',
-    },
-    {
-      id: 'CX',
-      name: 'Customer Experience',
-      fullName: 'CX-IA: Especialista en Experiencia',
-      icon: '😊',
-      color: '#ec4899',
-      description: 'UX/UI y experiencia del usuario',
-      skills: ['User Research', 'Usability Testing', 'Design Thinking'],
-      welcomeMessage: 'Como especialista en UX, quiero entender las necesidades de los usuarios.',
-    },
-    {
-      id: 'DSO',
-      name: 'DevSecOps',
-      fullName: 'DSO-IA: Ingeniero DevSecOps',
-      icon: '🔐',
-      color: '#ef4444',
-      description: 'Seguridad, CI/CD y operaciones',
-      skills: ['Security Audits', 'Pipeline Optimization', 'Infrastructure as Code'],
-      welcomeMessage: 'Hablemos sobre la seguridad y el deployment de tu aplicación.',
-    },
-  ];
-
-  const handleSelectSimulator = async (simulator: Simulator) => {
-    setActiveSimulator(simulator.id);
-    setMessages([
-      {
-        id: '0',
-        role: 'assistant',
-        content: `${simulator.welcomeMessage}
-
-**Rol:** ${simulator.fullName}
-
-**Habilidades clave:**
-${simulator.skills.map(s => `• ${s}`).join('\n')}
-
-¿En qué puedo ayudarte hoy?`,
-        timestamp: new Date(),
-      },
-    ]);
-
+  const handleSelectSimulator = async (sim: any) => {
+    setSelectedSimulator(sim);
+    setLoading(true);
     try {
-      // Crear sesión con el simulador seleccionado
-      const session = await sessionsService.create({
-        student_id: `student_${Date.now()}`,
-        activity_id: `simulator_${simulator.id}`,
-        mode: SessionMode.SIMULATOR,
-        simulator_type: simulator.id,
+      const response = await apiClient.createSession({
+        student_id: 'student_001',
+        activity_id: 'simulator_' + sim.id,
+        mode: 'SIMULATOR',
+        simulator_type: sim.id
       });
-      setSessionId(session.id);
+      setSessionId(response.data.id);
+      setMessages([{ role: 'assistant', content: `Hola, soy tu ${sim.name}. ¿En qué puedo ayudarte?` }]);
     } catch (error) {
-      console.error('Error creating simulator session:', error);
+      console.error('Error:', error);
+      alert('Error al iniciar simulador');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleSendMessage = async (content: string) => {
-    if (!sessionId) {
-      console.error('No session active');
-      return;
-    }
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim()) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content,
-      timestamp: new Date(),
-    };
-
+    const userMessage = { role: 'user', content: input };
     setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setLoading(true);
 
     try {
-      // Enviar al backend con el contexto del simulador
-      const response = await interactionsService.process({
+      const response = await apiClient.interactWithSimulator({
         session_id: sessionId,
-        prompt: content,
-        context: {
-          simulator_role: activeSimulator,
-          cognitive_intent: 'professional_simulation',
-        },
+        simulator_type: selectedSimulator.id,
+        prompt: input,
+        context: {}
       });
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.response,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error('Error processing message:', error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `⚠️ Error al procesar el mensaje. Por favor, intenta nuevamente.`,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: response.data.response || 'Sin respuesta'
+      }]);
+    } catch (error: any) {
+      console.error('Error:', error);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: `Error: ${error.response?.data?.detail || 'No se pudo procesar'}`
+      }]);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="simulators-page">
-      <header className="page-header">
-        <div className="header-content">
-          <div className="header-title">
-            <span className="header-icon">👥</span>
-            <h1>Simuladores Profesionales (S-IA-X)</h1>
-          </div>
-          <p className="header-subtitle">
-            6 roles de la industria del software • Aprende interactuando con profesionales virtuales
-          </p>
-        </div>
-      </header>
-
-      <div className="simulators-content">
-        {!activeSimulator ? (
-          <div className="simulators-grid">
-            {simulators.map((simulator) => (
-              <div
-                key={simulator.id}
-                className="simulator-card"
-                style={{ '--simulator-color': simulator.color } as React.CSSProperties}
-                onClick={() => handleSelectSimulator(simulator)}
-              >
-                <div className="simulator-header">
-                  <span className="simulator-icon">{simulator.icon}</span>
-                  <h3 className="simulator-name">{simulator.name}</h3>
-                </div>
-                <p className="simulator-description">{simulator.description}</p>
-                <div className="simulator-skills">
-                  {simulator.skills.map((skill, idx) => (
-                    <span key={idx} className="skill-tag">{skill}</span>
-                  ))}
-                </div>
-                <button className="simulator-action">
-                  Iniciar Simulación →
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="simulator-session">
-            <div className="session-header">
-              <div className="active-simulator">
-                <span className="simulator-icon">
-                  {simulators.find(s => s.id === activeSimulator)?.icon}
-                </span>
-                <div className="simulator-info">
-                  <h2>{simulators.find(s => s.id === activeSimulator)?.fullName}</h2>
-                  <p>{simulators.find(s => s.id === activeSimulator)?.description}</p>
-                </div>
-              </div>
-              <button
-                className="back-btn"
-                onClick={() => {
-                  setActiveSimulator(null);
-                  setMessages([]);
-                }}
-              >
-                ← Cambiar Simulador
-              </button>
-            </div>
-            <div className="chat-container">
-              <ChatBox
-                messages={messages}
-                onSendMessage={handleSendMessage}
-                placeholder={`Escribe tu mensaje para el ${simulators.find(s => s.id === activeSimulator)?.name}...`}
-              />
-            </div>
-          </div>
-        )}
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Simuladores Profesionales (S-IA-X)</h1>
+        <p className="text-gray-600 mt-2">Practica con 6 roles profesionales diferentes</p>
       </div>
+
+      {!selectedSimulator ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {simulators.map((sim) => (
+            <button
+              key={sim.id}
+              onClick={() => handleSelectSimulator(sim)}
+              className={`bg-white shadow rounded-lg p-6 hover:shadow-lg transition-shadow text-left border-l-4 border-${sim.color}-500`}
+            >
+              <div className="text-4xl mb-3">{sim.icon}</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">{sim.name}</h3>
+              <p className="text-sm text-gray-600">Click para comenzar</p>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white shadow rounded-lg">
+          <div className="p-4 border-b flex justify-between items-center">
+            <div className="flex items-center">
+              <span className="text-2xl mr-3">{selectedSimulator.icon}</span>
+              <h2 className="text-xl font-semibold">{selectedSimulator.name}</h2>
+            </div>
+            <button
+              onClick={() => { setSelectedSimulator(null); setMessages([]); setSessionId(''); }}
+              className="text-gray-600 hover:text-gray-900"
+            >
+              ← Volver
+            </button>
+          </div>
+
+          <div className="flex flex-col" style={{ height: '500px' }}>
+            <div className="flex-1 p-6 overflow-y-auto space-y-4">
+              {messages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-xl px-4 py-2 rounded-lg ${
+                    msg.role === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-900'
+                  }`}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 px-4 py-2 rounded-lg">Escribiendo...</div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t p-4">
+              <form onSubmit={handleSendMessage} className="flex space-x-2">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Escribe tu mensaje..."
+                  className="flex-1 px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={loading}
+                />
+                <button
+                  type="submit"
+                  disabled={loading || !input.trim()}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Enviar
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-};
+}

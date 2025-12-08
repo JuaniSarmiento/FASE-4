@@ -1,253 +1,128 @@
-/**
- * Git Analytics Page
- * Análisis de evolución de código con Git
- */
-import React, { useState, useEffect } from 'react';
-import { sessionsService, gitService } from '@/services/api';
-import { SessionMode } from '@/types/api.types';
-import type { GitTrace, GitEvolution } from '@/services/api/git.service';
-import './GitAnalyticsPage.css';
+import { useState } from 'react';
+import { apiClient } from '../services/apiClient';
 
-export const GitAnalyticsPage: React.FC = () => {
+export function GitAnalyticsPage() {
   const [sessionId, setSessionId] = useState('');
-  const [repoPath, setRepoPath] = useState('');
-  const [traces, setTraces] = useState<GitTrace[]>([]);
-  const [evolution, setEvolution] = useState<GitEvolution | null>(null);
+  const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    createDemoSession();
-  }, []);
-
-  const createDemoSession = async () => {
-    try {
-      const session = await sessionsService.create({
-        student_id: `git_demo_${Date.now()}`,
-        activity_id: 'git_analysis_demo',
-        mode: SessionMode.TUTOR,
-      });
-      setSessionId(session.id);
-    } catch (error) {
-      console.error('Error creating session:', error);
+  const handleAnalyze = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sessionId.trim()) {
+      alert('Ingresa un ID de sesión');
+      return;
     }
-  };
-
-  const analyzeRepository = async () => {
-    if (!repoPath.trim() || !sessionId) return;
 
     setLoading(true);
     try {
-      // Obtener trazas de Git para la sesión
-      const gitTraces = await gitService.getSessionGitTraces(sessionId);
-      setTraces(gitTraces);
-
-      // Obtener análisis de evolución del código
-      const codeEvolution = await gitService.getCodeEvolution(sessionId);
-      setEvolution(codeEvolution);
-    } catch (error) {
-      console.error('Error analyzing repository:', error);
-      setTraces([]);
-      setEvolution(null);
+      const response = await apiClient.getGitAnalytics(sessionId);
+      setAnalytics(response.data);
+    } catch (error: any) {
+      console.error('Error:', error);
+      alert(error.response?.data?.detail || 'Error al analizar Git');
     } finally {
       setLoading(false);
     }
   };
 
-  const stats = evolution ? {
-    total_commits: evolution.traces.length,
-    total_files: evolution.traces.reduce((acc, t) => acc + t.files_changed.length, 0),
-    total_insertions: evolution.traces.reduce((acc, t) => acc + t.lines_added, 0),
-    total_deletions: evolution.traces.reduce((acc, t) => acc + t.lines_deleted, 0),
-    quality: evolution.overall_quality,
-    consistency: evolution.consistency_score,
-  } : null;
-
   return (
-    <div className="git-analytics-page">
-      <header className="page-header">
-        <div className="header-content">
-          <div className="header-title">
-            <span className="header-icon">📦</span>
-            <h1>Git Analytics (N2)</h1>
-          </div>
-          <p className="header-subtitle">
-            Análisis de evolución de código • Correlación con aprendizaje • Patrones de desarrollo
-          </p>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Git Analytics (N2)</h1>
+        <p className="text-gray-600 mt-2">Análisis de trazas Git y patrones de desarrollo</p>
+      </div>
 
-      <div className="git-content">
-        {/* Input Section */}
-        <div className="input-section">
-          <h2 className="section-title">Conectar Repositorio</h2>
-          <div className="input-group">
-            <div className="input-field">
-              <label>Session ID</label>
-              <input
-                type="text"
-                placeholder="ID de sesión..."
-                value={sessionId}
-                readOnly
-              />
-            </div>
-            <div className="input-field">
-              <label>Ruta del Repositorio Git</label>
-              <input
-                type="text"
-                placeholder="/ruta/al/repositorio..."
-                value={repoPath}
-                onChange={(e) => setRepoPath(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && analyzeRepository()}
-              />
-            </div>
-            <button
-              className="analyze-btn"
-              onClick={analyzeRepository}
-              disabled={!repoPath.trim() || !sessionId}
-            >
-              🔍 Analizar Repositorio
-            </button>
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-xl font-semibold mb-4">Analizar Repositorio</h2>
+        <form onSubmit={handleAnalyze} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              ID de Sesión
+            </label>
+            <input
+              type="text"
+              value={sessionId}
+              onChange={(e) => setSessionId(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Ingresa el ID de la sesión"
+            />
           </div>
-        </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+          >
+            {loading ? 'Analizando...' : 'Analizar Git'}
+          </button>
+        </form>
+      </div>
 
-        {loading && (
-          <div className="loading-state">
-            <div className="spinner">🔄</div>
-            <p>Analizando commits y patrones de desarrollo...</p>
-          </div>
-        )}
-
-        {stats && !loading && (
-          <>
-            {/* Stats */}
-            <div className="stats-section">
-              <h2 className="section-title">Estadísticas del Repositorio</h2>
-              <div className="stats-grid">
-                <div className="stat-card" style={{ borderColor: '#4ade80' }}>
-                  <span className="stat-icon">📊</span>
-                  <div className="stat-info">
-                    <p className="stat-label">Total Commits</p>
-                    <p className="stat-value">{stats.total_commits}</p>
-                  </div>
-                </div>
-                <div className="stat-card" style={{ borderColor: '#f59e0b' }}>
-                  <span className="stat-icon">📁</span>
-                  <div className="stat-info">
-                    <p className="stat-label">Archivos Modificados</p>
-                    <p className="stat-value">{stats.total_files}</p>
-                  </div>
-                </div>
-                <div className="stat-card" style={{ borderColor: '#4ade80' }}>
-                  <span className="stat-icon">➕</span>
-                  <div className="stat-info">
-                    <p className="stat-label">Líneas Agregadas</p>
-                    <p className="stat-value">{stats.total_insertions}</p>
-                  </div>
-                </div>
-                <div className="stat-card" style={{ borderColor: '#ef4444' }}>
-                  <span className="stat-icon">➖</span>
-                  <div className="stat-info">
-                    <p className="stat-label">Líneas Eliminadas</p>
-                    <p className="stat-value">{stats.total_deletions}</p>
-                  </div>
-                </div>
-                <div className="stat-card" style={{ borderColor: '#8b5cf6' }}>
-                  <span className="stat-icon">⭐</span>
-                  <div className="stat-info">
-                    <p className="stat-label">Calidad</p>
-                    <p className="stat-value">{stats.quality}</p>
-                  </div>
-                </div>
-                <div className="stat-card" style={{ borderColor: '#06b6d4' }}>
-                  <span className="stat-icon">📊</span>
-                  <div className="stat-info">
-                    <p className="stat-label">Consistencia</p>
-                    <p className="stat-value">{(stats.consistency * 100).toFixed(1)}%</p>
-                  </div>
-                </div>
+      {analytics && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white shadow rounded-lg p-6">
+              <div className="flex items-center mb-2">
+                <span className="text-2xl mr-3">📊</span>
+                <h3 className="text-lg font-semibold text-gray-900">Total Commits</h3>
               </div>
+              <p className="text-3xl font-bold text-blue-600">{analytics.total_commits || 0}</p>
             </div>
 
-            {/* Insights from evolution analysis */}
-            {evolution && evolution.ai_assistance_indicators.length > 0 && (
-            <div className="insights-section">
-              <h2 className="section-title">Insights de Aprendizaje</h2>
-              <div className="insights-grid">
-                {evolution.ai_assistance_indicators.map((indicator, idx) => (
-                  <div className="insight-card" key={idx}>
-                    <div className="insight-header">
-                      <span className="insight-icon">📈</span>
-                      <h3>Indicador de Asistencia IA</h3>
-                    </div>
-                    <p className="insight-text">{indicator}</p>
-                  </div>
-                ))}
+            <div className="bg-white shadow rounded-lg p-6">
+              <div className="flex items-center mb-2">
+                <span className="text-2xl mr-3">⏱️</span>
+                <h3 className="text-lg font-semibold text-gray-900">Frecuencia</h3>
               </div>
+              <p className="text-3xl font-bold text-green-600">{analytics.commit_frequency || 'N/A'}</p>
+              <p className="text-sm text-gray-500 mt-1">commits/día</p>
             </div>
-            )}
 
-            {/* Git Traces History */}
-            <div className="commits-section">
-              <h2 className="section-title">
-                Historial de Git Traces ({traces.length})
-              </h2>
-              <div className="commits-list">
-                {traces.map((trace) => (
-                  <div key={trace.id} className="commit-card">
-                    <div className="commit-header">
-                      <div className="commit-info">
-                        <span className="commit-hash">#{trace.commit_hash || 'N/A'}</span>
-                        <span className="commit-message">{trace.commit_message || 'Sin mensaje'}</span>
+            <div className="bg-white shadow rounded-lg p-6">
+              <div className="flex items-center mb-2">
+                <span className="text-2xl mr-3">✨</span>
+                <h3 className="text-lg font-semibold text-gray-900">Calidad</h3>
+              </div>
+              <p className="text-3xl font-bold text-purple-600">{analytics.message_quality || 'N/A'}</p>
+              <p className="text-sm text-gray-500 mt-1">score</p>
+            </div>
+          </div>
+
+          {analytics.commits && analytics.commits.length > 0 && (
+            <div className="bg-white shadow rounded-lg p-6">
+              <h3 className="text-xl font-semibold mb-4">Historial de Commits</h3>
+              <div className="space-y-3">
+                {analytics.commits.slice(0, 10).map((commit: any, idx: number) => (
+                  <div key={idx} className="border-l-4 border-blue-500 pl-4 py-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-medium text-gray-900">{commit.message || 'Sin mensaje'}</p>
+                        <p className="text-sm text-gray-500">{commit.author || 'Unknown'}</p>
                       </div>
-                      <span className="commit-date">
-                        {new Date(trace.timestamp).toLocaleString()}
+                      <span className="text-xs text-gray-400">
+                        {commit.timestamp ? new Date(commit.timestamp).toLocaleDateString() : ''}
                       </span>
                     </div>
-                    <div className="commit-stats">
-                      <span className="commit-author">👤 {trace.author_name || 'Unknown'}</span>
-                      <div className="commit-changes">
-                        <span className="change-files">
-                          📁 {trace.files_changed.length} archivos
-                        </span>
-                        <span className="change-insertions">
-                          +{trace.lines_added}
-                        </span>
-                        <span className="change-deletions">
-                          -{trace.lines_deleted}
-                        </span>
-                      </div>
-                    </div>
                   </div>
                 ))}
               </div>
             </div>
+          )}
 
-            {/* Correlation with cognitive traces */}
-            {evolution && evolution.development_timeline.length > 0 && (
-              <div className="correlation-section">
-                <h2 className="section-title">Timeline de Desarrollo</h2>
-                <div className="correlation-card">
-                  <div className="correlation-icon">🔗</div>
-                  <div className="correlation-content">
-                    <h3>Análisis Temporal</h3>
-                    <p>
-                      Timeline de eventos de desarrollo detectados.
-                    </p>
-                    <div className="correlation-insights">
-                      {evolution.development_timeline.slice(0, 5).map((event, idx) => (
-                        <div className="correlation-item" key={idx}>
-                          <span className="correlation-label">{new Date(event.timestamp).toLocaleString()}:</span>
-                          <span className="correlation-value">{event.description} ({event.impact})</span>
-                        </div>
-                      ))}
-                    </div>
+          {analytics.patterns && (
+            <div className="bg-white shadow rounded-lg p-6">
+              <h3 className="text-xl font-semibold mb-4">Patrones Detectados</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Object.entries(analytics.patterns).map(([key, value]: [string, any]) => (
+                  <div key={key} className="border rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-900 mb-2 capitalize">{key.replace('_', ' ')}</h4>
+                    <p className="text-gray-700">{typeof value === 'object' ? JSON.stringify(value) : value}</p>
                   </div>
-                </div>
+                ))}
               </div>
-            )}
-          </>
-        )}
-      </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
-};
+}

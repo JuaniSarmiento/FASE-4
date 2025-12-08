@@ -16,8 +16,15 @@ Referencias:
 
 import logging
 from fastapi import APIRouter, Response
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
-from ..monitoring.metrics import export_metrics
+from ...core.metrics import (
+    interactions_total,
+    sessions_active,
+    llm_requests_total,
+    cache_hits,
+    cache_misses
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,16 +95,22 @@ async def get_metrics() -> Response:
         Response con métricas en formato text/plain
     """
     try:
-        content, content_type = export_metrics()
-
-        logger.debug("Exported Prometheus metrics", extra={"size_bytes": len(content)})
+        metrics_output = generate_latest()
+        
+        logger.debug("Exported Prometheus metrics", extra={"size_bytes": len(metrics_output)})
 
         return Response(
-            content=content,
-            media_type=content_type,
+            content=metrics_output,
+            media_type=CONTENT_TYPE_LATEST,
         )
 
     except Exception as e:
+        logger.error(f"Error exporting metrics: {e}")
+        return Response(
+            content="# Error exporting metrics\n",
+            media_type="text/plain",
+            status_code=500
+        )
         logger.error("Failed to export metrics", exc_info=True)
         # Retornar métricas vacías en caso de error (Prometheus prefiere esto a 500)
         return Response(

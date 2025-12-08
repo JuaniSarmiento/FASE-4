@@ -169,7 +169,7 @@ async def interact_with_simulator(
     )
 
     # Procesar interacción
-    response = simulator.interact(
+    response = await simulator.interact(
         student_input=request.prompt,
         context=request.context
     )
@@ -182,7 +182,7 @@ async def interact_with_simulator(
         trace_level=TraceLevel.N4_COGNITIVO,
         interaction_type=InteractionType.STUDENT_PROMPT,
         content=request.prompt,
-        cognitive_state="interaccion_simulador",
+        cognitive_state="exploracion",
         cognitive_intent=f"Interactuar con simulador {request.simulator_type.value}",
         ai_involvement=0.0,  # Es el estudiante quien habla
         metadata={
@@ -199,7 +199,7 @@ async def interact_with_simulator(
         trace_level=TraceLevel.N4_COGNITIVO,
         interaction_type=InteractionType.AI_RESPONSE,
         content=response["message"],
-        cognitive_state="interaccion_simulador",
+        cognitive_state="reflexion",
         cognitive_intent=f"Respuesta de simulador {request.simulator_type.value}",
         ai_involvement=1.0,  # Es el simulador quien responde
         metadata={

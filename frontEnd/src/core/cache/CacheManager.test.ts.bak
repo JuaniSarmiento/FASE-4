@@ -1,0 +1,172 @@
+/**
+ * Unit Tests - CacheManager
+ */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { CacheManager } from '@/core/cache/CacheManager';
+
+describe('CacheManager', () => {
+  let cache: CacheManager<string>;
+
+  beforeEach(() => {
+    cache = new CacheManager<string>({
+      maxSize: 3,
+      ttl: 1000, // 1 second
+      persistKey: 'test-cache'
+    });
+  });
+
+  afterEach(() => {
+    cache.clear();
+  });
+
+  describe('Basic Operations', () => {
+    it('should set and get values', () => {
+      cache.set('key1', 'value1');
+      expect(cache.get('key1')).toBe('value1');
+    });
+
+    it('should return undefined for non-existent keys', () => {
+      expect(cache.get('nonexistent')).toBeUndefined();
+    });
+
+    it('should check if key exists', () => {
+      cache.set('key1', 'value1');
+      expect(cache.has('key1')).toBe(true);
+      expect(cache.has('key2')).toBe(false);
+    });
+
+    it('should delete keys', () => {
+      cache.set('key1', 'value1');
+      cache.delete('key1');
+      expect(cache.has('key1')).toBe(false);
+    });
+
+    it('should clear all entries', () => {
+      cache.set('key1', 'value1');
+      cache.set('key2', 'value2');
+      cache.clear();
+      expect(cache.has('key1')).toBe(false);
+      expect(cache.has('key2')).toBe(false);
+    });
+  });
+
+  describe('LRU Eviction', () => {
+    it('should evict least recently used item when max size exceeded', () => {
+      cache.set('key1', 'value1');
+      cache.set('key2', 'value2');
+      cache.set('key3', 'value3');
+      cache.set('key4', 'value4'); // Should evict key1
+
+      expect(cache.has('key1')).toBe(false);
+      expect(cache.has('key2')).toBe(true);
+      expect(cache.has('key3')).toBe(true);
+      expect(cache.has('key4')).toBe(true);
+    });
+
+    it('should update access order on get', () => {
+      cache.set('key1', 'value1');
+      cache.set('key2', 'value2');
+      cache.set('key3', 'value3');
+
+      cache.get('key1'); // Access key1, making it most recent
+
+      cache.set('key4', 'value4'); // Should evict key2 (least recent)
+
+      expect(cache.has('key1')).toBe(true);
+      expect(cache.has('key2')).toBe(false);
+      expect(cache.has('key3')).toBe(true);
+      expect(cache.has('key4')).toBe(true);
+    });
+  });
+
+  describe('TTL Expiration', () => {
+    it('should expire entries after TTL', async () => {
+      cache.set('key1', 'value1');
+      expect(cache.get('key1')).toBe('value1');
+
+      // Wait for TTL to expire
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      expect(cache.get('key1')).toBeUndefined();
+    });
+
+    it('should not return expired entries', async () => {
+      cache.set('key1', 'value1');
+      cache.set('key2', 'value2');
+
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+
+      expect(cache.has('key1')).toBe(false);
+      expect(cache.has('key2')).toBe(false);
+    });
+  });
+
+  describe('Statistics', () => {
+    it('should track cache statistics', () => {
+      cache.set('key1', 'value1');
+      cache.get('key1'); // Hit
+      cache.get('key2'); // Miss
+
+      const stats = cache.getStats();
+
+      expect(stats.hits).toBe(1);
+      expect(stats.misses).toBe(1);
+      expect(stats.size).toBe(1);
+      expect(stats.hitRate).toBeCloseTo(0.5);
+    });
+
+    it('should calculate hit rate correctly', () => {
+      cache.set('key1', 'value1');
+      cache.get('key1'); // Hit
+      cache.get('key1'); // Hit
+      cache.get('key2'); // Miss
+
+      const stats = cache.getStats();
+
+      expect(stats.hitRate).toBeCloseTo(0.67, 2);
+    });
+  });
+
+  describe('Persistence', () => {
+    it('should persist cache to localStorage', () => {
+      const persistCache = new CacheManager<string>({
+        maxSize: 5,
+        ttl: 5000,
+        persistKey: 'persist-test'
+      });
+
+      persistCache.set('key1', 'value1');
+      persistCache.set('key2', 'value2');
+
+      // Check localStorage
+      const stored = localStorage.getItem('persist-test');
+      expect(stored).toBeTruthy();
+
+      const parsed = JSON.parse(stored!);
+      expect(parsed).toHaveLength(2);
+
+      persistCache.clear();
+    });
+
+    it('should load cache from localStorage on initialization', () => {
+      // Setup persisted data
+      const data = [
+        { key: 'key1', value: 'value1', timestamp: Date.now() },
+        { key: 'key2', value: 'value2', timestamp: Date.now() }
+      ];
+      localStorage.setItem('load-test', JSON.stringify(data));
+
+      const loadedCache = new CacheManager<string>({
+        maxSize: 5,
+        ttl: 5000,
+        persistKey: 'load-test'
+      });
+
+      expect(loadedCache.has('key1')).toBe(true);
+      expect(loadedCache.has('key2')).toBe(true);
+      expect(loadedCache.get('key1')).toBe('value1');
+
+      loadedCache.clear();
+    });
+  });
+});

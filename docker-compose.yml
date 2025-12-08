@@ -45,7 +45,7 @@ services:
       # LLM Provider - Ollama (contenedor separado)
       - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-phi3}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.2:3b}
       - OLLAMA_TEMPERATURE=${OLLAMA_TEMPERATURE:-0.7}
       - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT:-120}
 
@@ -189,6 +189,9 @@ services:
     container_name: ai-native-ollama
     ports:
       - "11434:11434"
+    environment:
+      # Keep model loaded in memory permanently for instant responses
+      - OLLAMA_KEEP_ALIVE=-1
     volumes:
       # Volumen persistente para modelos de Ollama
       - ollama_data:/root/.ollama

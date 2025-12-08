@@ -1,0 +1,225 @@
+/**
+ * Unit Tests - ProcessEvaluator Component
+ */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { ProcessEvaluator } from '@/features/evaluator/components/ProcessEvaluator';
+import { ToastProvider } from '@/shared/components/Toast/Toast';
+import * as SessionService from '@/core/services/SessionService';
+import * as EvaluationService from '@/core/services/EvaluationService';
+
+vi.mock('@/core/services/SessionService');
+vi.mock('@/core/services/EvaluationService');
+
+const renderWithToast = (component: React.ReactElement) => {
+  return render(<ToastProvider>{component}</ToastProvider>);
+};
+
+describe('ProcessEvaluator Component', () => {
+  const mockSessions = [
+    {
+      id: 'session-1',
+      student_id: 'student-1',
+      activity_id: 'activity-1',
+      mode: 'tutor',
+      created_at: '2024-01-01T00:00:00Z'
+    }
+  ];
+
+  const mockEvaluation = {
+    session_id: 'session-1',
+    overall_score: 85,
+    dimensions: {
+      planning: { score: 8, level: 'high', indicators: ['Clear goals', 'Structured approach'] },
+      execution: { score: 9, level: 'high', indicators: ['Correct implementation'] },
+      debugging: { score: 7, level: 'medium', indicators: ['Identified issues'] },
+      reflection: { score: 8, level: 'high', indicators: ['Self-assessment'] },
+      autonomy: { score: 9, level: 'high', indicators: ['Independent work'] }
+    },
+    patterns: {
+      autonomy_level: 0.9,
+      metacognition_score: 0.8,
+      delegation_ratio: 0.2
+    },
+    recommendations: ['Continue independent work', 'Practice debugging']
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (SessionService.sessionService.list as any).mockResolvedValue(mockSessions);
+    (EvaluationService.evaluationService.generate as any).mockResolvedValue(mockEvaluation);
+  });
+
+  describe('Initialization', () => {
+    it('should render component title', () => {
+      renderWithToast(<ProcessEvaluator />);
+      expect(screen.getByText(/Evaluación de Proceso/i)).toBeInTheDocument();
+    });
+
+    it('should load sessions on mount', async () => {
+      renderWithToast(<ProcessEvaluator />);
+      await waitFor(() => {
+        expect(SessionService.sessionService.list).toHaveBeenCalled();
+      });
+    });
+
+    it('should display session list', async () => {
+      renderWithToast(<ProcessEvaluator />);
+      await waitFor(() => {
+        expect(screen.getByText(/activity-1/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Session Selection', () => {
+    it('should select session and generate evaluation', async () => {
+      renderWithToast(<ProcessEvaluator />);
+
+      await waitFor(() => screen.getByText(/activity-1/i));
+      fireEvent.click(screen.getByText(/activity-1/i));
+
+      await waitFor(() => {
+        expect(EvaluationService.evaluationService.generate).toHaveBeenCalledWith('session-1');
+      });
+    });
+
+    it('should display overall score after generation', async () => {
+      renderWithToast(<ProcessEvaluator />);
+
+      await waitFor(() => screen.getByText(/activity-1/i));
+      fireEvent.click(screen.getByText(/activity-1/i));
+
+      await waitFor(() => {
+        expect(screen.getByText(/85/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Dimensions Display', () => {
+    it('should display all 5 dimensions', async () => {
+      renderWithToast(<ProcessEvaluator />);
+
+      await waitFor(() => screen.getByText(/activity-1/i));
+      fireEvent.click(screen.getByText(/activity-1/i));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Planificación/i)).toBeInTheDocument();
+        expect(screen.getByText(/Ejecución/i)).toBeInTheDocument();
+        expect(screen.getByText(/Depuración/i)).toBeInTheDocument();
+        expect(screen.getByText(/Reflexión/i)).toBeInTheDocument();
+        expect(screen.getByText(/Autonomía/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should display dimension scores', async () => {
+      renderWithToast(<ProcessEvaluator />);
+
+      await waitFor(() => screen.getByText(/activity-1/i));
+      fireEvent.click(screen.getByText(/activity-1/i));
+
+      await waitFor(() => {
+        expect(screen.getByText(/8\/10/i)).toBeInTheDocument(); // Planning
+        expect(screen.getByText(/9\/10/i)).toBeInTheDocument(); // Execution
+      });
+    });
+
+    it('should display dimension indicators', async () => {
+      renderWithToast(<ProcessEvaluator />);
+
+      await waitFor(() => screen.getByText(/activity-1/i));
+      fireEvent.click(screen.getByText(/activity-1/i));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Clear goals/i)).toBeInTheDocument();
+        expect(screen.getByText(/Correct implementation/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Patterns Display', () => {
+    it('should display autonomy pattern', async () => {
+      renderWithToast(<ProcessEvaluator />);
+
+      await waitFor(() => screen.getByText(/activity-1/i));
+      fireEvent.click(screen.getByText(/activity-1/i));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Autonomía/i)).toBeInTheDocument();
+        expect(screen.getByText(/90%/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should display metacognition pattern', async () => {
+      renderWithToast(<ProcessEvaluator />);
+
+      await waitFor(() => screen.getByText(/activity-1/i));
+      fireEvent.click(screen.getByText(/activity-1/i));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Metacognición/i)).toBeInTheDocument();
+        expect(screen.getByText(/80%/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should display delegation pattern', async () => {
+      renderWithToast(<ProcessEvaluator />);
+
+      await waitFor(() => screen.getByText(/activity-1/i));
+      fireEvent.click(screen.getByText(/activity-1/i));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Delegación/i)).toBeInTheDocument();
+        expect(screen.getByText(/20%/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Recommendations', () => {
+    it('should display recommendations list', async () => {
+      renderWithToast(<ProcessEvaluator />);
+
+      await waitFor(() => screen.getByText(/activity-1/i));
+      fireEvent.click(screen.getByText(/activity-1/i));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Recomendaciones/i)).toBeInTheDocument();
+        expect(screen.getByText(/Continue independent work/i)).toBeInTheDocument();
+        expect(screen.getByText(/Practice debugging/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('PDF Export', () => {
+    it('should call export service when button clicked', async () => {
+      renderWithToast(<ProcessEvaluator />);
+
+      await waitFor(() => screen.getByText(/activity-1/i));
+      fireEvent.click(screen.getByText(/activity-1/i));
+
+      await waitFor(() => screen.getByText(/Exportar PDF/i));
+      fireEvent.click(screen.getByText(/Exportar PDF/i));
+
+      await waitFor(() => {
+        expect(EvaluationService.evaluationService.exportPDF).toHaveBeenCalledWith('session-1');
+      });
+    });
+  });
+
+  describe('Regenerate', () => {
+    it('should regenerate evaluation when button clicked', async () => {
+      renderWithToast(<ProcessEvaluator />);
+
+      await waitFor(() => screen.getByText(/activity-1/i));
+      fireEvent.click(screen.getByText(/activity-1/i));
+
+      await waitFor(() => screen.getByText(/Regenerar/i));
+      
+      vi.clearAllMocks();
+      fireEvent.click(screen.getByText(/Regenerar/i));
+
+      await waitFor(() => {
+        expect(EvaluationService.evaluationService.generate).toHaveBeenCalledWith('session-1');
+      });
+    });
+  });
+});

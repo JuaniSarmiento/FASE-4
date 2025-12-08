@@ -1,0 +1,158 @@
+/**
+ * Unit Tests - HttpClient Circuit Breaker
+ */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { HttpClient, CircuitState } from '@/core/http/HttpClient';
+import axios from 'axios';
+
+vi.mock('axios');
+
+describe('HttpClient - Circuit Breaker', () => {
+  let client: HttpClient;
+  const baseURL = 'http://localhost:8000';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    client = new HttpClient(baseURL);
+  });
+
+  describe('Circuit States', () => {
+    it('should start in CLOSED state', () => {
+      expect(client.getCircuitState()).toBe(CircuitState.CLOSED);
+    });
+
+    it('should transition to OPEN after failure threshold', async () => {
+      const error = new Error('Network error');
+      (axios.create as any).mockReturnValue({
+        get: vi.fn().mockRejectedValue(error)
+      });
+
+      // Trigger 5 failures (threshold)
+      for (let i = 0; i < 5; i++) {
+        try {
+          await client.get('/test');
+        } catch {}
+      }
+
+      expect(client.getCircuitState()).toBe(CircuitState.OPEN);
+    });
+
+    it('should reject requests immediately when OPEN', async () => {
+      const error = new Error('Network error');
+      (axios.create as any).mockReturnValue({
+        get: vi.fn().mockRejectedValue(error)
+      });
+
+      // Open circuit
+      for (let i = 0; i < 5; i++) {
+        try {
+          await client.get('/test');
+        } catch {}
+      }
+
+      // Next request should be rejected immediately
+      const start = Date.now();
+      try {
+        await client.get('/test');
+      } catch (err: any) {
+        const duration = Date.now() - start;
+        expect(duration).toBeLessThan(100); // Should fail fast
+        expect(err.message).toContain('Circuit breaker is OPEN');
+      }
+    });
+  });
+
+  describe('Retry Logic', () => {
+    it('should retry failed requests up to maxRetries', async () => {
+      const mockGet = vi.fn()
+        .mockRejectedValueOnce(new Error('Fail 1'))
+        .mockRejectedValueOnce(new Error('Fail 2'))
+        .mockResolvedValueOnce({ data: 'success' });
+
+      (axios.create as any).mockReturnValue({
+        get: mockGet
+      });
+
+      await client.get('/test');
+
+      expect(mockGet).toHaveBeenCalledTimes(3);
+    });
+
+    it('should use exponential backoff between retries', async () => {
+      const mockGet = vi.fn()
+        .mockRejectedValueOnce(new Error('Fail 1'))
+        .mockRejectedValueOnce(new Error('Fail 2'))
+        .mockResolvedValueOnce({ data: 'success' });
+
+      (axios.create as any).mockReturnValue({
+        get: mockGet
+      });
+
+      const start = Date.now();
+      await client.get('/test');
+      const duration = Date.now() - start;
+
+      // Should wait at least 300ms (100 + 200 for exponential backoff)
+      expect(duration).toBeGreaterThanOrEqual(200);
+    });
+
+    it('should not retry on non-retryable status codes', async () => {
+      const mockGet = vi.fn().mockRejectedValue({
+        response: { status: 400 }
+      });
+
+      (axios.create as any).mockReturnValue({
+        get: mockGet
+      });
+
+      try {
+        await client.get('/test');
+      } catch {}
+
+      expect(mockGet).toHaveBeenCalledTimes(1); // No retries
+    });
+  });
+
+  describe('Correlation IDs', () => {
+    it('should inject correlation ID in headers', async () => {
+      const mockGet = vi.fn().mockResolvedValue({ data: 'success' });
+      (axios.create as any).mockReturnValue({
+        get: mockGet
+      });
+
+      await client.get('/test');
+
+      const callConfig = mockGet.mock.calls[0][1];
+      expect(callConfig?.headers?.['X-Correlation-ID']).toBeTruthy();
+    });
+
+    it('should use provided correlation ID if exists', async () => {
+      const mockGet = vi.fn().mockResolvedValue({ data: 'success' });
+      (axios.create as any).mockReturnValue({
+        get: mockGet
+      });
+
+      const correlationId = 'test-correlation-id';
+      await client.get('/test', { headers: { 'X-Correlation-ID': correlationId } });
+
+      const callConfig = mockGet.mock.calls[0][1];
+      expect(callConfig?.headers?.['X-Correlation-ID']).toBe(correlationId);
+    });
+  });
+
+  describe('Request Queue', () => {
+    it('should queue concurrent requests to respect rate limit', async () => {
+      const mockGet = vi.fn().mockResolvedValue({ data: 'success' });
+      (axios.create as any).mockReturnValue({
+        get: mockGet
+      });
+
+      // Send 12 requests (more than requestsPerSecond: 10)
+      const requests = Array(12).fill(null).map(() => client.get('/test'));
+
+      await Promise.all(requests);
+
+      expect(mockGet).toHaveBeenCalledTimes(12);
+    });
+  });
+});

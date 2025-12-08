@@ -1,253 +1,134 @@
-/**
- * Tutor Cognitivo Page - T-IA-Cog
- * Tutoría socr ática y andamiaje metacognitivo
- */
-import React, { useState, useEffect } from 'react';
-import { ChatBox, Message } from '@/components/Chat/ChatBox';
-import { sessionsService, interactionsService } from '@/services/api';
-import './TutorPage.css';
+import { useState } from 'react';
+import { apiClient } from '../services/apiClient';
 
-type TutorMode = 'socratico' | 'explicativo' | 'guiado' | 'metacognitivo';
-type HelpLevel = 'minimo' | 'bajo' | 'medio' | 'alto';
-
-export const TutorPage: React.FC = () => {
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+export function TutorPage() {
+  const [sessionId, setSessionId] = useState('');
+  const [messages, setMessages] = useState<Array<{role: string; content: string}>>([]);
+  const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<TutorMode>('socratico');
-  const [helpLevel, setHelpLevel] = useState<HelpLevel>('medio');
-  const [activityContext, setActivityContext] = useState('');
+  const [hasSession, setHasSession] = useState(false);
 
-  const modes = [
-    {
-      id: 'socratico' as TutorMode,
-      name: 'Socrático',
-      icon: '🤔',
-      description: 'Preguntas orientadoras para que descubras la solución',
-      color: '#667eea',
-    },
-    {
-      id: 'explicativo' as TutorMode,
-      name: 'Explicativo',
-      icon: '📚',
-      description: 'Explicaciones conceptuales y fundamentos teóricos',
-      color: '#4ade80',
-    },
-    {
-      id: 'guiado' as TutorMode,
-      name: 'Guiado',
-      icon: '🗺️',
-      description: 'Pistas graduadas paso a paso',
-      color: '#f59e0b',
-    },
-    {
-      id: 'metacognitivo' as TutorMode,
-      name: 'Metacognitivo',
-      icon: '🧠',
-      description: 'Reflexión sobre tu proceso de pensamiento',
-      color: '#8b5cf6',
-    },
-  ];
-
-  const helpLevels = [
-    { id: 'minimo' as HelpLevel, name: 'Mínimo', description: 'Solo preguntas' },
-    { id: 'bajo' as HelpLevel, name: 'Bajo', description: 'Pistas generales' },
-    { id: 'medio' as HelpLevel, name: 'Medio', description: 'Pistas detalladas' },
-    { id: 'alto' as HelpLevel, name: 'Alto', description: 'Explicaciones completas' },
-  ];
-
-  useEffect(() => {
-    // Initialize session
-    const initSession = async () => {
-      try {
-        const session = await sessionsService.create({
-          student_id: 'demo_student_001',
-          activity_id: 'tutor_demo',
-          mode: 'TUTOR' as any, // Backend expects uppercase
-        });
-        setSessionId(session.id);
-
-        // Welcome message
-        setMessages([
-          {
-            id: '0',
-            role: 'assistant',
-            content: `¡Hola! Soy tu **Tutor Cognitivo** (T-IA-Cog). 
-
-Estoy aquí para ayudarte a **aprender a pensar**, no para darte las respuestas directamente.
-
-**Modo actual:** ${modes.find(m => m.id === mode)?.name}
-**Nivel de ayuda:** ${helpLevels.find(l => l.id === helpLevel)?.name}
-
-¿En qué estás trabajando hoy?`,
-            timestamp: new Date(),
-          },
-        ]);
-      } catch (error) {
-        console.error('Error initializing session:', error);
-      }
-    };
-
-    initSession();
-  }, [mode, helpLevel]);
-
-  const handleSendMessage = async (content: string) => {
-    if (!sessionId) return;
-
-    // Validate minimum length
-    if (content.trim().length < 10) {
-      const warningMessage: Message = {
-        id: Date.now().toString(),
-        role: 'system',
-        content: '⚠️ Tu mensaje debe tener al menos 10 caracteres. Por favor, describe tu duda con más detalle.',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, warningMessage]);
-      return;
+  const handleCreateSession = async () => {
+    setLoading(true);
+    try {
+      const response = await apiClient.createSession({
+        student_id: 'student_001',
+        activity_id: 'tutor_session_' + Date.now(),
+        mode: 'TUTOR'
+      });
+      setSessionId(response.data.id);
+      setHasSession(true);
+      setMessages([{ role: 'assistant', content: '¡Hola! Soy tu tutor IA. ¿En qué puedo ayudarte hoy?' }]);
+    } catch (error) {
+      console.error('Error creating session:', error);
+      alert('Error al crear sesión');
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Add user message
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || !sessionId) return;
+
+    const userMessage = { role: 'user', content: input };
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
     setLoading(true);
 
     try {
-      // Send to API
-      const response = await interactionsService.process({
+      const response = await apiClient.processInteraction({
         session_id: sessionId,
-        prompt: content,
-        context: {
-          tutor_mode: mode,
-          help_level: helpLevel,
-          activity_context: activityContext,
-          cognitive_intent: 'learning',
-        },
+        prompt: input,
+        context: {}
       });
 
-      // Add assistant response
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.response,
-        timestamp: new Date(),
-        metadata: (response as any).metadata,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: response.data.response || 'Sin respuesta'
+      }]);
     } catch (error: any) {
-      console.error('Error processing interaction:', error);
-      
-      // Extract error message from response
-      let errorContent = 'Hubo un error al procesar tu mensaje. Por favor, intenta nuevamente.';
-      
-      if (error.response?.data?.error?.message) {
-        errorContent = `⚠️ ${error.response.data.error.message}`;
-      } else if (error.message) {
-        errorContent = `⚠️ ${error.message}`;
-      }
-      
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'system',
-        content: errorContent,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      console.error('Error sending message:', error);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: `Error: ${error.response?.data?.detail || 'No se pudo procesar la interacción'}`
+      }]);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="tutor-page">
-      {/* Header */}
-      <div className="tutor-header">
-        <div>
-          <h1 className="page-title">
-            <span className="title-icon">🎓</span>
-            Tutor Cognitivo (T-IA-Cog)
-          </h1>
-          <p className="page-subtitle">
-            Andamiaje cognitivo y metacognitivo para potenciar tu aprendizaje
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Tutor Cognitivo (T-IA-Cog)</h1>
+        <p className="text-gray-600 mt-2">Tutoría socrática y andamiaje metacognitivo</p>
       </div>
 
-      <div className="tutor-content">
-        {/* Configuration Sidebar */}
-        <aside className="config-sidebar">
-          <div className="config-section">
-            <h3 className="config-title">Modo de Tutoría</h3>
-            <div className="mode-grid">
-              {modes.map((m) => (
-                <button
-                  key={m.id}
-                  className={`mode-card ${mode === m.id ? 'active' : ''}`}
-                  onClick={() => setMode(m.id)}
-                  style={{
-                    '--mode-color': m.color,
-                  } as React.CSSProperties}
-                >
-                  <span className="mode-icon">{m.icon}</span>
-                  <span className="mode-name">{m.name}</span>
-                  <p className="mode-description">{m.description}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="config-section">
-            <h3 className="config-title">Nivel de Ayuda</h3>
-            <div className="help-levels">
-              {helpLevels.map((level) => (
-                <button
-                  key={level.id}
-                  className={`help-level ${helpLevel === level.id ? 'active' : ''}`}
-                  onClick={() => setHelpLevel(level.id)}
-                >
-                  <span className="help-name">{level.name}</span>
-                  <span className="help-desc">{level.description}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="config-section">
-            <h3 className="config-title">Contexto de Actividad</h3>
-            <textarea
-              className="context-input"
-              placeholder="Describe en qué estás trabajando (opcional)..."
-              value={activityContext}
-              onChange={(e) => setActivityContext(e.target.value)}
-              rows={4}
-            />
-          </div>
-
-          <div className="info-box">
-            <h4>💡 Principios del Tutor</h4>
-            <ul>
-              <li>✅ Guía tu razonamiento</li>
-              <li>✅ Promueve la reflexión</li>
-              <li>❌ No da soluciones directas</li>
-              <li>❌ No sustituye tu agencia</li>
-            </ul>
-          </div>
-        </aside>
-
-        {/* Chat Area */}
-        <div className="chat-area">
-          <ChatBox
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            loading={loading}
-            placeholder={`Describe tu duda con detalle (mínimo 10 caracteres)...`}
-          />
+      {!hasSession ? (
+        <div className="bg-white shadow rounded-lg p-8 text-center">
+          <h2 className="text-xl font-semibold mb-4">Iniciar Nueva Sesión de Tutoría</h2>
+          <p className="text-gray-600 mb-6">Crea una sesión para comenzar a interactuar con el tutor IA</p>
+          <button
+            onClick={handleCreateSession}
+            disabled={loading}
+            className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Creando sesión...' : 'Crear Sesión de Tutoría'}
+          </button>
         </div>
-      </div>
+      ) : (
+        <div className="bg-white shadow rounded-lg flex flex-col" style={{ height: '600px' }}>
+          {/* Messages */}
+          <div className="flex-1 p-6 overflow-y-auto space-y-4">
+            {messages.map((msg, idx) => (
+              <div
+                key={idx}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-xl px-4 py-2 rounded-lg ${
+                    msg.role === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-900'
+                  }`}
+                >
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-100 text-gray-900 px-4 py-2 rounded-lg">
+                  Pensando...
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="border-t p-4">
+            <form onSubmit={handleSendMessage} className="flex space-x-2">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Escribe tu pregunta..."
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={loading}
+              />
+              <button
+                type="submit"
+                disabled={loading || !input.trim()}
+                className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+              >
+                Enviar
+              </button>
+            </form>
+            <p className="text-xs text-gray-500 mt-2">Sesión ID: {sessionId}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
-};
+}

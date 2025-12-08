@@ -42,6 +42,11 @@ from .routers.institutional_risks import router as institutional_risks_router
 from .routers.export import router as export_router
 # HIGH-01 - Prometheus Metrics
 from .routers.metrics import router as metrics_router
+# FASE 3.1 - Nuevos endpoints integrados
+from .routers.risk_analysis import router as risk_analysis_router
+from .routers.traceability import router as traceability_router
+from .routers.git_analytics import router as git_analytics_router
+from .routers.evaluations import router as evaluations_router
 from .middleware import setup_exception_handlers, setup_logging_middleware
 from .middleware.rate_limiter import limiter, rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -301,7 +306,13 @@ app.include_router(export_router, prefix=API_V1_PREFIX)
 # HIGH-01 - Prometheus Metrics (NO prefix, expone en /metrics directamente)
 app.include_router(metrics_router)
 
-logger.info(f"Routers registered with prefix: {API_V1_PREFIX} (15 routers total, including Sprint 6)")
+# FASE 3.1 - Nuevos endpoints integrados con Ollama
+app.include_router(risk_analysis_router, prefix=API_V1_PREFIX)
+app.include_router(traceability_router, prefix=API_V1_PREFIX)
+app.include_router(git_analytics_router, prefix=API_V1_PREFIX)
+app.include_router(evaluations_router, prefix=API_V1_PREFIX)
+
+logger.info(f"Routers registered with prefix: {API_V1_PREFIX} (19 routers total, including FASE 3.1)")
 logger.info("Prometheus metrics endpoint: /metrics")
 
 

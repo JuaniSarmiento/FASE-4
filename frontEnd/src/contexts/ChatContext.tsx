@@ -12,7 +12,7 @@ import {
   APIError,
 } from '@/types/api.types';
 import { sessionsService, interactionsService } from '@/services/api';
-import { useSessionPersistence } from '@/hooks/useSessionPersistence';
+// import { useSessionPersistence } from '@/hooks/useSessionPersistence';
 import type { ChatMessage } from '@/types/api.types';
 
 interface ChatContextValue {
@@ -49,25 +49,31 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const isSessionActive = currentSession?.status === 'ACTIVE';
 
-  // Persistence hook
-  const { saveSession, loadSession, clearSession, updateActivity } = useSessionPersistence();
+  // Persistence hook - temporalmente deshabilitado
+  // const { saveSession, loadSession, clearSession, updateActivity } = useSessionPersistence();
+  const saveSession = () => {};
+  const loadSession = () => null;
+  const clearSession = () => {};
+  const updateActivity = () => {};
 
   // Load persisted session on mount
   useEffect(() => {
-    const persisted = loadSession();
-    if (persisted) {
-      setCurrentSession(persisted.session);
-      setMessages(persisted.messages);
-      console.log('[Session Restored from localStorage]', persisted.session.id);
-    }
-  }, [loadSession]);
+    // Temporalmente deshabilitado
+    // const persisted = loadSession();
+    // if (persisted) {
+    //   setCurrentSession(persisted.session);
+    //   setMessages(persisted.messages);
+    //   console.log('[Session Restored from localStorage]', persisted.session.id);
+    // }
+  }, []);
 
   // Persist session and messages when they change
   useEffect(() => {
-    if (currentSession) {
-      saveSession(currentSession, messages);
-    }
-  }, [currentSession, messages, saveSession]);
+    // Temporalmente deshabilitado
+    // if (currentSession) {
+    //   saveSession(currentSession, messages);
+    // }
+  }, [currentSession, messages]);
 
   // Crear nueva sesión
   const createSession = useCallback(async (

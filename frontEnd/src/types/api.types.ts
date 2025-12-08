@@ -181,6 +181,12 @@ export interface SessionDetailResponse extends SessionResponse {
 
 // ==================== INTERACTION ====================
 
+export interface InteractionCreate {
+  session_id: string;
+  student_input: string;
+  context?: Record<string, any>;
+}
+
 export interface InteractionRequest {
   session_id: string;
   prompt: string;
@@ -189,6 +195,7 @@ export interface InteractionRequest {
 }
 
 export interface InteractionResponse {
+  id?: string;  // Legacy compatibility
   interaction_id: string;
   session_id: string;
   response: string;
@@ -200,6 +207,7 @@ export interface InteractionResponse {
   trace_id: string;
   risks_detected: string[];
   timestamp: string;
+  tokens_used?: number;  // Optional metadata
 }
 
 export interface InteractionSummary {
@@ -562,4 +570,158 @@ export interface ActivityResponse {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ==================== RISK ANALYSIS ====================
+
+export interface RiskDimensionScore {
+  score: number;
+  level: RiskLevel;
+  indicators: string[];
+}
+
+export interface RiskAnalysis {
+  session_id: string;
+  overall_score: number;
+  risk_level: RiskLevel;
+  dimensions: {
+    cognitive: RiskDimensionScore;
+    ethical: RiskDimensionScore;
+    epistemic: RiskDimensionScore;
+    technical: RiskDimensionScore;
+    governance: RiskDimensionScore;
+  };
+  top_risks: Array<{
+    dimension: string;
+    description: string;
+    severity: RiskLevel;
+    mitigation: string;
+  }>;
+  recommendations: string[];
+}
+
+// ==================== TRACEABILITY ====================
+
+export interface TraceNode {
+  id: string;
+  level: 'N1' | 'N2' | 'N3' | 'N4';
+  timestamp: string;
+  data: any;
+  metadata: {
+    processing_time_ms?: number;
+    tokens_used?: number;
+    model?: string;
+    transformations?: string[];
+  };
+}
+
+export interface Trace {
+  session_id: string;
+  interaction_id: string;
+  nodes: TraceNode[];
+  total_latency_ms: number;
+  total_tokens: number;
+}
+
+// ==================== GIT ANALYTICS ====================
+
+export interface CommitMetrics {
+  total_commits: number;
+  avg_commits_per_day: number;
+  total_insertions: number;
+  total_deletions: number;
+  code_churn: number;
+  avg_commit_size: number;
+  refactoring_ratio: number;
+}
+
+export interface Contributor {
+  name: string;
+  email: string;
+  commits: number;
+  insertions: number;
+  deletions: number;
+  percentage: number;
+}
+
+export interface CommitTrend {
+  date: string;
+  commits: number;
+  insertions: number;
+  deletions: number;
+}
+
+export interface GitAnalyticsData {
+  repository: string;
+  branch: string;
+  period: {
+    start: string;
+    end: string;
+  };
+  metrics: CommitMetrics;
+  contributors: Contributor[];
+  trends: CommitTrend[];
+  quality_indicators: {
+    message_quality_score: number;
+    avg_message_length: number;
+    conventional_commits_ratio: number;
+  };
+}
+
+// ==================== SIMULATORS ====================
+
+export enum SimulatorRole {
+  PRODUCT_OWNER = 'product_owner',
+  SCRUM_MASTER = 'scrum_master',
+  CX_DESIGNER = 'cx_designer',
+  DEVOPS_ENGINEER = 'devops_engineer',
+  SECURITY_ENGINEER = 'security_engineer',
+  SOFTWARE_ARCHITECT = 'software_architect'
+}
+
+export interface SimulatorInteractionRequest {
+  role: SimulatorRole;
+  message: string;
+  context?: Record<string, any>;
+}
+
+export interface SimulatorInteractionResponse {
+  role: SimulatorRole;
+  response: string;
+  evaluation: {
+    score: number;
+    feedback: string;
+    suggestions: string[];
+  };
+  metadata: {
+    model: string;
+    tokens_used: number;
+    processing_time_ms: number;
+  };
+}
+
+// ==================== EVALUATION ====================
+
+export interface EvaluationDimension {
+  score: number;
+  level: string;
+  indicators: string[];
+}
+
+export interface ProcessEvaluation {
+  session_id: string;
+  overall_score: number;
+  dimensions: {
+    planning: EvaluationDimension;
+    execution: EvaluationDimension;
+    debugging: EvaluationDimension;
+    reflection: EvaluationDimension;
+    autonomy: EvaluationDimension;
+  };
+  patterns: {
+    autonomy_level: number;
+    metacognition_score: number;
+    delegation_ratio: number;
+  };
+  recommendations: string[];
 }

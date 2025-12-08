@@ -509,12 +509,8 @@ Sé breve y preciso. Máximo 4-5 preguntas."""
             return response.content.strip()
         except Exception as e:
             logger.error(f"LLM generation failed: {e}", exc_info=True)
-            return """Para ayudarte mejor, necesito entender tu proceso de pensamiento:
-
-1. ¿Qué entendés que te están pidiendo resolver?
-2. ¿Qué conceptos creés que son relevantes?
-3. ¿Cómo funcionaría una solución ideal?
-4. ¿Qué intentaste hasta ahora?"""
+            # Circuit Breaker: Fallback cuando Ollama está inaccesible
+            return self._get_fallback_socratic_response(prompt)
 
     async def _generate_conceptual_explanation(self, prompt: str, strategy: Dict[str, Any]) -> str:
         """Genera explicación conceptual usando LLM"""
@@ -542,15 +538,8 @@ Usa markdown para formato. Sé claro y conciso (máximo 200 palabras)."""
             return response.content.strip()
         except Exception as e:
             logger.error(f"LLM generation failed: {e}", exc_info=True)
-            return """**Concepto clave**: [El concepto que preguntas es fundamental en programación]
-
-**Principio**: [Por qué es importante entenderlo]
-
-**Ejemplo simple**: [Analogía o ejemplo concreto]
-
-**Aplicación**: [Cómo lo usarías en la práctica]
-
-¿Tiene sentido? ¿Qué parte quieres que profundice?"""
+            # Circuit Breaker: Fallback cuando Ollama está inaccesible
+            return self._get_fallback_conceptual_explanation(prompt)
 
     async def _generate_guided_hints(self, prompt: str, strategy: Dict[str, Any]) -> str:
         """Genera pistas guiadas usando LLM"""
@@ -578,15 +567,8 @@ Cada pista debe acercar al estudiante a la solución sin dársela directamente."
             return response.content.strip()
         except Exception as e:
             logger.error(f"LLM generation failed: {e}", exc_info=True)
-            return """**Pista 1**: Considerá descomponer el problema en subproblemas más pequeños
-
-**Pista 2**: Pensá en qué estructuras de datos te facilitarían el acceso a la información
-
-**Pista 3**: No olvides considerar los casos especiales (vacío, un elemento, etc.)
-
-**Próximo paso**: Intenta escribir el esqueleto de la solución primero
-
-¿Con cuál pista querés que profundice?"""
+            # Circuit Breaker: Fallback cuando Ollama está inaccesible
+            return self._get_fallback_guided_hints(prompt)
 
     def _generate_clarification_request(self, prompt: str, strategy: Dict[str, Any]) -> str:
         """Solicita clarificación"""
@@ -1152,3 +1134,85 @@ Por favor, reformulá tu pregunta con más detalles.
         if self.session_repo is not None:
             self.session_repo.update_mode(session_id, mode.value.upper())
         # Si no hay repo, no hacer nada (backward compatibility)
+
+    # =========================================================================
+    # Circuit Breaker: Fallback Methods (cuando LLM falla o está inaccesible)
+    # =========================================================================
+    
+    def _get_fallback_socratic_response(self, prompt: str) -> str:
+        """
+        Fallback cuando Ollama está inaccesible - Respuesta Socrática
+        
+        Usa un banco de preguntas genéricas pero pedagógicamente válidas
+        """
+        logger.warning("Using fallback Socratic response (LLM unavailable)")
+        return """⚠️ El sistema de IA está experimentando dificultades temporales, pero puedo ayudarte con estas preguntas guía:
+
+**Para ayudarte mejor, necesito entender tu proceso de pensamiento:**
+
+1. ¿Qué entendés que te están pidiendo resolver?
+2. ¿Qué conceptos creés que son relevantes para este problema?
+3. ¿Cómo funcionaría una solución ideal?
+4. ¿Qué has intentado hasta ahora y qué resultados obtuviste?
+
+💡 **Tip**: Intenta descomponer el problema en partes más pequeñas y manejables.
+
+_Responde estas preguntas y podremos continuar cuando el sistema se recupere._"""
+
+    def _get_fallback_conceptual_explanation(self, prompt: str) -> str:
+        """
+        Fallback cuando Ollama está inaccesible - Explicación Conceptual
+        """
+        logger.warning("Using fallback conceptual explanation (LLM unavailable)")
+        return """⚠️ El sistema de IA está temporalmente fuera de servicio.
+
+**Mientras tanto, aquí tienes una estructura para explorar el concepto:**
+
+**Concepto clave**: [Identifica el concepto central de tu pregunta]
+
+**Principio fundamental**: 
+- ¿Por qué es importante este concepto en programación?
+- ¿Qué problema resuelve?
+
+**Ejemplo simple**: 
+- Busca en tu material de estudio un ejemplo concreto
+- Intenta relacionarlo con situaciones de la vida real
+
+**Aplicación práctica**: 
+- ¿Cómo lo usarías en un proyecto real?
+- ¿Qué ventajas te daría?
+
+📚 **Recomendación**: Consulta la documentación oficial del lenguaje o framework que estás usando.
+
+_El sistema estará disponible nuevamente en breve._"""
+
+    def _get_fallback_guided_hints(self, prompt: str) -> str:
+        """
+        Fallback cuando Ollama está inaccesible - Pistas Guiadas
+        """
+        logger.warning("Using fallback guided hints (LLM unavailable)")
+        return """⚠️ El asistente de IA está temporalmente inaccesible.
+
+**Aquí tienes una estrategia general de resolución de problemas:**
+
+**Pista 1 - Descomponer**: 
+- Divide el problema en subproblemas más pequeños
+- Resuelve cada parte por separado
+
+**Pista 2 - Estructuras de datos**: 
+- ¿Qué estructura (lista, diccionario, conjunto) facilitaría la solución?
+- ¿Necesitas acceso rápido, orden, o valores únicos?
+
+**Pista 3 - Casos especiales**: 
+- No olvides casos límite (vacío, un solo elemento, valores extremos)
+- Prueba tu lógica con ejemplos simples primero
+
+**Pista 4 - Algoritmo paso a paso**: 
+- Escribe en pseudocódigo antes de programar
+- Verifica cada paso con un ejemplo concreto
+
+**Próximo paso**: Intenta escribir el esqueleto de la solución primero, sin preocuparte por los detalles.
+
+🔧 **Herramientas**: Usa print() o debugger para entender qué está haciendo tu código en cada paso.
+
+_El sistema de IA volverá pronto. Mientras tanto, estos pasos pueden ayudarte a avanzar._"""

@@ -1,0 +1,121 @@
+/**
+ * Servicio de sesiones con caché y validaciones
+ */
+import { BaseService } from './BaseService';
+import { API_ENDPOINTS } from '@/core/config/routes.config';
+import { sessionsCache } from '@/core/cache/CacheManager';
+import {
+  SessionMode,
+  SessionCreate,
+  SessionResponse,
+  SessionStatus
+} from '@/types/api.types';
+
+class SessionService extends BaseService<SessionResponse> {
+  constructor() {
+    super(API_ENDPOINTS.SESSIONS);
+    this.cache = sessionsCache as any;
+  }
+
+  async create(data: SessionCreate): Promise<SessionResponse> {
+    try {
+      this.validateSessionCreate(data);
+      return await this.post(this.endpoint, data);
+    } catch (error) {
+      return this.handleError(error, 'Failed to create session');
+    }
+  }
+
+  async getById(id: string): Promise<SessionResponse> {
+    try {
+      return await this.get(`${this.endpoint}/${id}`);
+    } catch (error) {
+      return this.handleError(error, `Failed to get session ${id}`);
+    }
+  }
+
+  async list(filters?: {
+    mode?: SessionMode;
+    student_id?: string;
+    status?: SessionStatus;
+  }): Promise<SessionResponse[]> {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.mode) params.append('mode', filters.mode);
+      if (filters?.student_id) params.append('student_id', filters.student_id);
+      if (filters?.status) params.append('status', filters.status);
+
+      const url = params.toString()
+        ? `${this.endpoint}?${params.toString()}`
+        : this.endpoint;
+
+      return await this.list(url);
+    } catch (error) {
+      return this.handleError(error, 'Failed to list sessions');
+    }
+  }
+
+  async end(id: string): Promise<SessionResponse> {
+    try {
+      return await this.post(`${this.endpoint}/${id}/end`, {});
+    } catch (error) {
+      return this.handleError(error, `Failed to end session ${id}`);
+    }
+  }
+
+  async pause(id: string): Promise<SessionResponse> {
+    try {
+      return await this.post(`${this.endpoint}/${id}/pause`, {});
+    } catch (error) {
+      return this.handleError(error, `Failed to pause session ${id}`);
+    }
+  }
+
+  async resume(id: string): Promise<SessionResponse> {
+    try {
+      return await this.post(`${this.endpoint}/${id}/resume`, {});
+    } catch (error) {
+      return this.handleError(error, `Failed to resume session ${id}`);
+    }
+  }
+
+  async getActive(studentId: string): Promise<SessionResponse | null> {
+    try {
+      const sessions = await this.list({
+        student_id: studentId,
+        status: SessionStatus.ACTIVE
+      });
+
+      return sessions.length > 0 ? sessions[0] : null;
+    } catch (error) {
+      console.error('Failed to get active session:', error);
+      return null;
+    }
+  }
+
+  // Debounced search
+  searchDebounced = this.debounce(
+    'search',
+    async (query: string) => {
+      return this.list({ student_id: query });
+    },
+    300
+  );
+
+  // Validation
+  private validateSessionCreate(data: SessionCreate): void {
+    if (!data.student_id || data.student_id.trim().length === 0) {
+      throw new Error('student_id is required');
+    }
+
+    if (!data.activity_id || data.activity_id.trim().length === 0) {
+      throw new Error('activity_id is required');
+    }
+
+    if (!Object.values(SessionMode).includes(data.mode)) {
+      throw new Error(`Invalid mode: ${data.mode}`);
+    }
+  }
+}
+
+export const sessionService = new SessionService();

@@ -22,6 +22,7 @@ passlib[bcrypt]>=1.7.4
 bcrypt>=4.0.0,<5.0.0  # Pin to 4.x for passlib compatibility (5.x breaks passlib)
 email-validator>=2.1.0
 slowapi>=0.1.9  # Rate limiting
+websockets>=12.0  # WebSocket support for real-time updates
 
 # Redis dependencies (P1.2 - Production cache)
 redis>=5.0.0  # Redis client for distributed caching
@@ -29,6 +30,7 @@ hiredis>=2.2.3  # C parser for faster Redis protocol parsing (optional performan
 
 # Monitoring dependencies (HIGH-01 - Prometheus metrics)
 prometheus-client>=0.19.0  # Prometheus metrics instrumentation
+prometheus-fastapi-instrumentator>=6.1.0  # FastAPI metrics middleware
 
 # Testing dependencies
 pytest>=8.0.0

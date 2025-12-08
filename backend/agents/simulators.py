@@ -40,7 +40,7 @@ class SimuladorProfesionalAgent:
         self.config = config or {}
         self.context = {}
 
-    def interact(self, student_input: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def interact(self, student_input: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Interactúa según el rol del simulador.
 
@@ -48,21 +48,21 @@ class SimuladorProfesionalAgent:
         Si no, usa respuestas predefinidas (fallback para testing).
         """
         if self.simulator_type == SimuladorType.PRODUCT_OWNER:
-            return self._interact_as_product_owner(student_input, context)
+            return await self._interact_as_product_owner(student_input, context)
         elif self.simulator_type == SimuladorType.SCRUM_MASTER:
-            return self._interact_as_scrum_master(student_input, context)
+            return await self._interact_as_scrum_master(student_input, context)
         elif self.simulator_type == SimuladorType.TECH_INTERVIEWER:
-            return self._interact_as_interviewer(student_input, context)
+            return await self._interact_as_interviewer(student_input, context)
         elif self.simulator_type == SimuladorType.INCIDENT_RESPONDER:
-            return self._interact_as_incident_responder(student_input, context)
+            return await self._interact_as_incident_responder(student_input, context)
         elif self.simulator_type == SimuladorType.DEVSECOPS:
-            return self._interact_as_devsecops(student_input, context)
+            return await self._interact_as_devsecops(student_input, context)
         elif self.simulator_type == SimuladorType.CLIENT:
-            return self._interact_as_client(student_input, context)
+            return await self._interact_as_client(student_input, context)
         else:
             return {"message": "Simulador en desarrollo", "metadata": {}}
 
-    def _interact_as_product_owner(
+    async def _interact_as_product_owner(
         self,
         student_input: str,
         context: Optional[Dict[str, Any]]
@@ -70,7 +70,7 @@ class SimuladorProfesionalAgent:
         """Simula Product Owner"""
         # Si hay LLM provider disponible, usar respuesta dinámica
         if self.llm_provider:
-            return self._generate_llm_response(
+            return await self._generate_llm_response(
                 role="Product Owner",
                 system_prompt="""Eres un Product Owner experimentado de una empresa de software.
 Tu rol es cuestionar propuestas técnicas, pedir criterios de aceptación claros,
@@ -106,7 +106,7 @@ Necesito justificaciones técnicas sólidas para priorizar esto en el backlog.
             }
         }
 
-    def _interact_as_scrum_master(
+    async def _interact_as_scrum_master(
         self,
         student_input: str,
         context: Optional[Dict[str, Any]]
@@ -114,7 +114,7 @@ Necesito justificaciones técnicas sólidas para priorizar esto en el backlog.
         """Simula Scrum Master"""
         # Si hay LLM provider disponible, usar respuesta dinámica
         if self.llm_provider:
-            return self._generate_llm_response(
+            return await self._generate_llm_response(
                 role="Scrum Master",
                 system_prompt="""Eres un Scrum Master certificado facilitando ceremonias ágiles.
 Tu rol es hacer daily standups, identificar impedimentos, ayudar al equipo a auto-organizarse,
@@ -149,7 +149,7 @@ pasando? ¿Necesitamos re-estimar o hay deuda técnica no considerada?
             }
         }
 
-    def _interact_as_interviewer(
+    async def _interact_as_interviewer(
         self,
         student_input: str,
         context: Optional[Dict[str, Any]]
@@ -157,7 +157,7 @@ pasando? ¿Necesitamos re-estimar o hay deuda técnica no considerada?
         """Simula entrevista técnica"""
         # Si hay LLM provider disponible, usar respuesta dinámica
         if self.llm_provider:
-            return self._generate_llm_response(
+            return await self._generate_llm_response(
                 role="Senior Technical Interviewer",
                 system_prompt="""Eres un entrevistador técnico senior evaluando candidatos.
 Tu rol es hacer preguntas conceptuales sobre algoritmos y estructuras de datos,
@@ -192,7 +192,7 @@ Justificá tu respuesta con análisis de complejidad.
             }
         }
 
-    def _interact_as_devsecops(
+    async def _interact_as_devsecops(
         self,
         student_input: str,
         context: Optional[Dict[str, Any]]
@@ -200,7 +200,7 @@ Justificá tu respuesta con análisis de complejidad.
         """Simula analista DevSecOps"""
         # Si hay LLM provider disponible, usar respuesta dinámica
         if self.llm_provider:
-            return self._generate_llm_response(
+            return await self._generate_llm_response(
                 role="DevSecOps Security Analyst",
                 system_prompt="""Eres un analista de seguridad DevSecOps experimentado.
 Tu rol es auditar código, detectar vulnerabilidades (SQL injection, XSS, CSRF, etc.),
@@ -238,7 +238,7 @@ He detectado varias vulnerabilidades en tu código:
             }
         }
 
-    def _interact_as_incident_responder(
+    async def _interact_as_incident_responder(
         self,
         student_input: str,
         context: Optional[Dict[str, Any]]
@@ -250,7 +250,7 @@ He detectado varias vulnerabilidades en tu código:
         """
         # Si hay LLM provider disponible, usar respuesta dinámica
         if self.llm_provider:
-            return self._generate_llm_response(
+            return await self._generate_llm_response(
                 role="Senior DevOps Incident Responder",
                 system_prompt="""Eres un ingeniero DevOps senior gestionando un incidente en producción.
 Tu rol es hacer triage, diagnosticar el problema, priorizar acciones bajo presión,
@@ -300,7 +300,7 @@ Necesito respuestas en <5 minutos. El CEO está preguntando cuándo volvemos onl
             }
         }
 
-    def _interact_as_client(
+    async def _interact_as_client(
         self,
         student_input: str,
         context: Optional[Dict[str, Any]]
@@ -312,7 +312,7 @@ Necesito respuestas en <5 minutos. El CEO está preguntando cuándo volvemos onl
         """
         # Si hay LLM provider disponible, usar respuesta dinámica
         if self.llm_provider:
-            return self._generate_llm_response(
+            return await self._generate_llm_response(
                 role="Non-technical Client",
                 system_prompt="""Eres un cliente no técnico con una idea de negocio.
 Tus requisitos son ambiguos, a veces contradictorios, y cambias de opinión.
@@ -355,7 +355,7 @@ Ah, y tiene que estar lista en 2 semanas porque mi cuñado dijo que puede conseg
             }
         }
 
-    def _generate_llm_response(
+    async def _generate_llm_response(
         self,
         role: str,
         system_prompt: str,
@@ -400,7 +400,7 @@ Ah, y tiene que estar lista en 2 semanas porque mi cuñado dijo que puede conseg
 
             # Generar respuesta
             logger.info(f"Generando respuesta con LLM para rol: {role}")
-            response = self.llm_provider.generate(
+            response = await self.llm_provider.generate(
                 messages=messages,
                 temperature=0.7,  # Creatividad moderada para simuladores
                 max_tokens=500  # Respuestas concisas

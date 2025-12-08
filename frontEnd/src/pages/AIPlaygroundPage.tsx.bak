@@ -90,7 +90,7 @@ export function AIPlaygroundPage() {
       });
 
       const assistantMessage: Message = {
-        id: response.id,
+        id: response.interaction_id,
         role: 'assistant',
         content: response.response,
         timestamp: new Date(response.timestamp),

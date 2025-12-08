@@ -18,6 +18,7 @@ from typing import Optional, Dict, Any, List, AsyncIterator
 import logging
 import httpx
 import json
+import asyncio
 from contextlib import asynccontextmanager
 
 from .base import LLMProvider, LLMMessage, LLMResponse, LLMRole
@@ -81,6 +82,11 @@ class OllamaProvider(LLMProvider):
         self.model = self.config.get("model", "llama2")
         self.temperature = self.config.get("temperature", 0.7)
         self.timeout = self.config.get("timeout", 60.0)
+        
+        # Retry configuration for intelligent retries
+        self.max_retries = self.config.get("max_retries", 3)
+        self.retry_delay = self.config.get("retry_delay", 1.0)  # seconds
+        self.retry_backoff = self.config.get("retry_backoff", 2.0)  # exponential multiplier
 
         # Remove trailing slash from base_url
         self.base_url = self.base_url.rstrip("/")
@@ -97,7 +103,8 @@ class OllamaProvider(LLMProvider):
                 "base_url": self.base_url,
                 "model": self.model,
                 "temperature": self.temperature,
-                "timeout": self.timeout
+                "timeout": self.timeout,
+                "max_retries": self.max_retries
             }
         )
 
@@ -190,7 +197,24 @@ class OllamaProvider(LLMProvider):
         max_tokens: Optional[int],
         **kwargs
     ) -> LLMResponse:
-        """Execute the actual Ollama API call (extracted for metrics instrumentation)"""
+        """
+        Execute the actual Ollama API call with intelligent retries
+        
+        Implements exponential backoff retry strategy:
+        - Attempt 1: immediate
+        - Attempt 2: wait 1s
+        - Attempt 3: wait 2s
+        - Attempt 4: wait 4s (if max_retries=3)
+        
+        Retries on:
+        - Connection errors (Ollama down/restarting)
+        - Timeout errors (model loading/slow)
+        - 5xx server errors (temporary issues)
+        
+        Does NOT retry on:
+        - 4xx client errors (bad request, won't fix itself)
+        - JSON parsing errors (corrupted response)
+        """
         client = self._get_client()
 
         # Convert messages to Ollama format
@@ -214,92 +238,128 @@ class OllamaProvider(LLMProvider):
         if kwargs:
             payload["options"].update(kwargs)
 
-        try:
-            # Make API request
-            response = await client.post(
-                self.chat_endpoint,
-                json=payload,
-                headers={"Content-Type": "application/json"}
-            )
+        # Retry loop with exponential backoff
+        last_exception = None
+        for attempt in range(self.max_retries):
+            try:
+                # Make API request
+                response = await client.post(
+                    self.chat_endpoint,
+                    json=payload,
+                    headers={"Content-Type": "application/json"}
+                )
 
-            # Check for HTTP errors
-            response.raise_for_status()
+                # Check for HTTP errors
+                response.raise_for_status()
 
-            # Parse response
-            data = response.json()
+                # Parse response
+                data = response.json()
 
-            # Extract generated content
-            content = data.get("message", {}).get("content", "")
-            if not content:
-                raise ValueError("Ollama returned empty response")
+                # Extract generated content
+                content = data.get("message", {}).get("content", "")
+                if not content:
+                    raise ValueError("Ollama returned empty response")
 
-            # Extract token usage
-            # Ollama returns: prompt_eval_count (input tokens), eval_count (output tokens)
-            prompt_tokens = data.get("prompt_eval_count", 0)
-            completion_tokens = data.get("eval_count", 0)
-            total_tokens = prompt_tokens + completion_tokens
+                # Extract token usage
+                # Ollama returns: prompt_eval_count (input tokens), eval_count (output tokens)
+                prompt_tokens = data.get("prompt_eval_count", 0)
+                completion_tokens = data.get("eval_count", 0)
+                total_tokens = prompt_tokens + completion_tokens
 
-            # Build LLMResponse
-            return LLMResponse(
-                content=content,
-                model=self.model,
-                usage={
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "total_tokens": total_tokens
-                },
-                metadata={
-                    "provider": "ollama",
-                    "base_url": self.base_url,
-                    "temperature": temperature,
-                    "total_duration": data.get("total_duration"),
-                    "load_duration": data.get("load_duration"),
-                    "prompt_eval_duration": data.get("prompt_eval_duration"),
-                    "eval_duration": data.get("eval_duration"),
-                }
-            )
+                # Build LLMResponse
+                return LLMResponse(
+                    content=content,
+                    model=self.model,
+                    usage={
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": total_tokens
+                    },
+                    metadata={
+                        "provider": "ollama",
+                        "base_url": self.base_url,
+                        "temperature": temperature,
+                        "total_duration": data.get("total_duration"),
+                        "load_duration": data.get("load_duration"),
+                        "prompt_eval_duration": data.get("prompt_eval_duration"),
+                        "eval_duration": data.get("eval_duration"),
+                        "attempts": attempt + 1  # Track how many attempts it took
+                    }
+                )
 
-        except httpx.ConnectError as e:
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError) as e:
+                last_exception = e
+                is_last_attempt = (attempt == self.max_retries - 1)
+                
+                # Determine if we should retry
+                should_retry = False
+                if isinstance(e, httpx.ConnectError):
+                    should_retry = True  # Always retry connection errors
+                    error_type = "connection"
+                elif isinstance(e, httpx.TimeoutException):
+                    should_retry = True  # Always retry timeouts
+                    error_type = "timeout"
+                elif isinstance(e, httpx.HTTPStatusError):
+                    # Only retry 5xx errors (server errors), not 4xx (client errors)
+                    should_retry = e.response.status_code >= 500
+                    error_type = f"HTTP {e.response.status_code}"
+                
+                if should_retry and not is_last_attempt:
+                    # Calculate backoff delay (exponential)
+                    delay = self.retry_delay * (self.retry_backoff ** attempt)
+                    logger.warning(
+                        f"Ollama {error_type} error (attempt {attempt + 1}/{self.max_retries}). "
+                        f"Retrying in {delay:.1f}s...",
+                        extra={
+                            "model": self.model,
+                            "attempt": attempt + 1,
+                            "max_retries": self.max_retries,
+                            "delay": delay,
+                            "error": str(e)
+                        }
+                    )
+                    await asyncio.sleep(delay)
+                    continue  # Retry
+                else:
+                    # Don't retry or last attempt - raise the error
+                    break
+
+        # If we get here, all retries failed
+        if isinstance(last_exception, httpx.ConnectError):
             logger.error(
-                f"Failed to connect to Ollama server at {self.base_url}",
-                extra={"error": str(e)}
+                f"Failed to connect to Ollama server at {self.base_url} after {self.max_retries} attempts",
+                extra={"error": str(last_exception)}
             )
             raise ValueError(
-                f"❌ Cannot connect to Ollama server at {self.base_url}. "
+                f"❌ Cannot connect to Ollama server at {self.base_url} after {self.max_retries} attempts. "
                 f"Make sure Ollama is running:\n"
                 f"  1. Install Ollama: https://ollama.ai\n"
                 f"  2. Start server: ollama serve\n"
                 f"  3. Pull model: ollama pull {self.model}\n"
-                f"Error details: {str(e)}"
-            ) from e
+                f"Error details: {str(last_exception)}"
+            ) from last_exception
 
-        except httpx.TimeoutException as e:
+        elif isinstance(last_exception, httpx.TimeoutException):
             logger.error(
-                f"Ollama request timed out after {self.timeout}s",
-                extra={"model": self.model, "error": str(e)}
+                f"Ollama request timed out after {self.timeout}s ({self.max_retries} attempts)",
+                extra={"model": self.model, "error": str(last_exception)}
             )
             raise ValueError(
-                f"⏱️  Ollama request timed out after {self.timeout}s. "
+                f"⏱️  Ollama request timed out after {self.timeout}s ({self.max_retries} attempts). "
                 f"Try increasing timeout or using a smaller model."
-            ) from e
+            ) from last_exception
 
-        except httpx.HTTPStatusError as e:
+        elif isinstance(last_exception, httpx.HTTPStatusError):
             logger.error(
-                f"Ollama HTTP error: {e.response.status_code}",
-                extra={"status_code": e.response.status_code, "response": e.response.text}
+                f"Ollama HTTP error: {last_exception.response.status_code}",
+                extra={"status_code": last_exception.response.status_code, "response": last_exception.response.text}
             )
             raise ValueError(
-                f"❌ Ollama API error ({e.response.status_code}): {e.response.text}"
-            ) from e
-
-        except (KeyError, json.JSONDecodeError) as e:
-            logger.error(
-                "Failed to parse Ollama response",
-                extra={"error": str(e), "response": response.text if response else None}
-            )
-            raise ValueError(
-                f"❌ Invalid response format from Ollama: {str(e)}"
-            ) from e
+                f"❌ Ollama API error ({last_exception.response.status_code}): {last_exception.response.text}"
+            ) from last_exception
+        
+        # This shouldn't happen, but just in case
+        raise ValueError("Ollama call failed for unknown reason")
 
     async def generate_stream(
         self,

@@ -1,0 +1,266 @@
+/**
+ * Unit Tests - TutorChat Component
+ */
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { TutorChat } from '@/features/tutor/components/TutorChat';
+import { ToastProvider } from '@/shared/components/Toast/Toast';
+import * as SessionService from '@/core/services/SessionService';
+import * as InteractionService from '@/core/services/InteractionService';
+
+vi.mock('@/core/services/SessionService');
+vi.mock('@/core/services/InteractionService');
+
+const renderWithToast = (component: React.ReactElement) => {
+  return render(<ToastProvider>{component}</ToastProvider>);
+};
+
+describe('TutorChat Component', () => {
+  const mockSessions = [
+    {
+      id: 'session-1',
+      student_id: 'student-1',
+      activity_id: 'activity-1',
+      mode: 'tutor',
+      created_at: '2024-01-01T00:00:00Z'
+    }
+  ];
+
+  const mockInteractions = [
+    {
+      id: 'interaction-1',
+      user_input: 'Hello',
+      ai_response: 'Hi there!',
+      created_at: '2024-01-01T00:01:00Z',
+      metadata: {
+        cognitive_state: 'exploring',
+        ai_involvement: 0.5,
+        is_blocked: false,
+        input_tokens: 5,
+        output_tokens: 10
+      }
+    }
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (SessionService.sessionService.list as any).mockResolvedValue(mockSessions);
+    (SessionService.sessionService.get as any).mockResolvedValue(mockSessions[0]);
+    (InteractionService.interactionService.create as any).mockResolvedValue(mockInteractions[0]);
+  });
+
+  describe('Initialization', () => {
+    it('should render mode selector', () => {
+      renderWithToast(<TutorChat />);
+      expect(screen.getByText(/Modo Tutor/i)).toBeInTheDocument();
+    });
+
+    it('should display 3 tutor modes', () => {
+      renderWithToast(<TutorChat />);
+      expect(screen.getByText(/Socrático/i)).toBeInTheDocument();
+      expect(screen.getByText(/Explicativo/i)).toBeInTheDocument();
+      expect(screen.getByText(/Guiado/i)).toBeInTheDocument();
+    });
+
+    it('should load sessions on mount', async () => {
+      renderWithToast(<TutorChat />);
+      await waitFor(() => {
+        expect(SessionService.sessionService.list).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('Mode Selection', () => {
+    it('should select socratic mode', async () => {
+      renderWithToast(<TutorChat />);
+      const socraticBtn = screen.getByText(/Socrático/i);
+      fireEvent.click(socraticBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText(/El tutor hace preguntas/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should select explicativo mode', async () => {
+      renderWithToast(<TutorChat />);
+      const explicativoBtn = screen.getByText(/Explicativo/i);
+      fireEvent.click(explicativoBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText(/El tutor proporciona explicaciones/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should select guiado mode', async () => {
+      renderWithToast(<TutorChat />);
+      const guiadoBtn = screen.getByText(/Guiado/i);
+      fireEvent.click(guiadoBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText(/El tutor ofrece guía paso a paso/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Message Sending', () => {
+    it('should validate minimum message length', async () => {
+      renderWithToast(<TutorChat />);
+
+      // Select mode first
+      fireEvent.click(screen.getByText(/Socrático/i));
+      await waitFor(() => screen.getByPlaceholderText(/Escribe tu pregunta/i));
+
+      const input = screen.getByPlaceholderText(/Escribe tu pregunta/i);
+      const user = userEvent.setup();
+
+      await user.type(input, 'Hi'); // Too short (< 10 chars)
+      fireEvent.click(screen.getByText(/Enviar/i));
+
+      // Should show validation error
+      await waitFor(() => {
+        expect(screen.getByText(/mínimo 10 caracteres/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should send valid message', async () => {
+      renderWithToast(<TutorChat />);
+
+      fireEvent.click(screen.getByText(/Socrático/i));
+      await waitFor(() => screen.getByPlaceholderText(/Escribe tu pregunta/i));
+
+      const input = screen.getByPlaceholderText(/Escribe tu pregunta/i);
+      const user = userEvent.setup();
+
+      await user.type(input, 'This is a valid message with enough characters');
+      fireEvent.click(screen.getByText(/Enviar/i));
+
+      await waitFor(() => {
+        expect(InteractionService.interactionService.create).toHaveBeenCalled();
+      });
+    });
+
+    it('should clear input after sending', async () => {
+      renderWithToast(<TutorChat />);
+
+      fireEvent.click(screen.getByText(/Socrático/i));
+      await waitFor(() => screen.getByPlaceholderText(/Escribe tu pregunta/i));
+
+      const input = screen.getByPlaceholderText(/Escribe tu pregunta/i) as HTMLInputElement;
+      const user = userEvent.setup();
+
+      await user.type(input, 'Valid message here');
+      fireEvent.click(screen.getByText(/Enviar/i));
+
+      await waitFor(() => {
+        expect(input.value).toBe('');
+      });
+    });
+  });
+
+  describe('Metadata Display', () => {
+    it('should display cognitive state badge', async () => {
+      renderWithToast(<TutorChat />);
+
+      fireEvent.click(screen.getByText(/Socrático/i));
+      await waitFor(() => screen.getByPlaceholderText(/Escribe tu pregunta/i));
+
+      const input = screen.getByPlaceholderText(/Escribe tu pregunta/i);
+      const user = userEvent.setup();
+
+      await user.type(input, 'Valid message here');
+      fireEvent.click(screen.getByText(/Enviar/i));
+
+      await waitFor(() => {
+        expect(screen.getByText(/exploring/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should display AI involvement percentage', async () => {
+      renderWithToast(<TutorChat />);
+
+      fireEvent.click(screen.getByText(/Socrático/i));
+      await waitFor(() => screen.getByPlaceholderText(/Escribe tu pregunta/i));
+
+      const input = screen.getByPlaceholderText(/Escribe tu pregunta/i);
+      const user = userEvent.setup();
+
+      await user.type(input, 'Valid message here');
+      fireEvent.click(screen.getByText(/Enviar/i));
+
+      await waitFor(() => {
+        expect(screen.getByText(/50%/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should display token counts', async () => {
+      renderWithToast(<TutorChat />);
+
+      fireEvent.click(screen.getByText(/Socrático/i));
+      await waitFor(() => screen.getByPlaceholderText(/Escribe tu pregunta/i));
+
+      const input = screen.getByPlaceholderText(/Escribe tu pregunta/i);
+      const user = userEvent.setup();
+
+      await user.type(input, 'Valid message here');
+      fireEvent.click(screen.getByText(/Enviar/i));
+
+      await waitFor(() => {
+        expect(screen.getByText(/15 tokens/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Abort Functionality', () => {
+    it('should show abort button while loading', async () => {
+      (InteractionService.interactionService.create as any).mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve(mockInteractions[0]), 5000))
+      );
+
+      renderWithToast(<TutorChat />);
+
+      fireEvent.click(screen.getByText(/Socrático/i));
+      await waitFor(() => screen.getByPlaceholderText(/Escribe tu pregunta/i));
+
+      const input = screen.getByPlaceholderText(/Escribe tu pregunta/i);
+      const user = userEvent.setup();
+
+      await user.type(input, 'Valid message here');
+      fireEvent.click(screen.getByText(/Enviar/i));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Cancelar/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should abort request when clicked', async () => {
+      let abortCalled = false;
+      (InteractionService.interactionService.create as any).mockImplementation(
+        (data: any, signal?: AbortSignal) => {
+          signal?.addEventListener('abort', () => {
+            abortCalled = true;
+          });
+          return new Promise((resolve) => setTimeout(() => resolve(mockInteractions[0]), 5000));
+        }
+      );
+
+      renderWithToast(<TutorChat />);
+
+      fireEvent.click(screen.getByText(/Socrático/i));
+      await waitFor(() => screen.getByPlaceholderText(/Escribe tu pregunta/i));
+
+      const input = screen.getByPlaceholderText(/Escribe tu pregunta/i);
+      const user = userEvent.setup();
+
+      await user.type(input, 'Valid message here');
+      fireEvent.click(screen.getByText(/Enviar/i));
+
+      await waitFor(() => screen.getByText(/Cancelar/i));
+      fireEvent.click(screen.getByText(/Cancelar/i));
+
+      await waitFor(() => {
+        expect(abortCalled).toBe(true);
+      });
+    });
+  });
+});
