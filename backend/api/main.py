@@ -47,6 +47,9 @@ from .routers.risk_analysis import router as risk_analysis_router
 from .routers.traceability import router as traceability_router
 from .routers.git_analytics import router as git_analytics_router
 from .routers.evaluations import router as evaluations_router
+from .routers.events import router as events_router
+from .routers.exercises import router as exercises_router
+from .routers.auth_new import router as auth_new_router
 from .middleware import setup_exception_handlers, setup_logging_middleware
 from .middleware.rate_limiter import limiter, rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -286,8 +289,8 @@ app.include_router(traces_router, prefix=API_V1_PREFIX)
 app.include_router(risks_router, prefix=API_V1_PREFIX)
 app.include_router(activities_router, prefix=API_V1_PREFIX)
 
-# Production Readiness - Authentication
-app.include_router(auth_router, prefix=API_V1_PREFIX)
+# Production Readiness - Authentication (DISABLED - usando auth_new_router)
+# app.include_router(auth_router, prefix=API_V1_PREFIX)
 
 # Sprint 3 - Nuevos routers
 app.include_router(simulators_router, prefix=API_V1_PREFIX)
@@ -311,8 +314,11 @@ app.include_router(risk_analysis_router, prefix=API_V1_PREFIX)
 app.include_router(traceability_router, prefix=API_V1_PREFIX)
 app.include_router(git_analytics_router, prefix=API_V1_PREFIX)
 app.include_router(evaluations_router, prefix=API_V1_PREFIX)
+app.include_router(events_router, prefix=API_V1_PREFIX)
+app.include_router(exercises_router, prefix=API_V1_PREFIX)
+app.include_router(auth_new_router, prefix=API_V1_PREFIX)
 
-logger.info(f"Routers registered with prefix: {API_V1_PREFIX} (19 routers total, including FASE 3.1)")
+logger.info(f"Routers registered with prefix: {API_V1_PREFIX} (21 routers total, including FASE 3.1 + auth_new)")
 logger.info("Prometheus metrics endpoint: /metrics")
 
 

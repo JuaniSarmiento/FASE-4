@@ -17,6 +17,11 @@ class ApiClient {
     // Request interceptor
     this.client.interceptors.request.use(
       (config) => {
+        // Add auth token if available
+        const token = localStorage.getItem('token');
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
         console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`);
         return config;
       },
@@ -31,6 +36,14 @@ class ApiClient {
         return Promise.reject(error);
       }
     );
+  }
+
+  setToken(token: string | null) {
+    if (token) {
+      this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } else {
+      delete this.client.defaults.headers.common['Authorization'];
+    }
   }
 
   // Sessions
@@ -79,26 +92,62 @@ class ApiClient {
     return response.data;
   }
 
+  // Events
+  async createEvent(data: { session_id: string; event_type: string; event_data: any; description?: string; severity?: string }) {
+    const response = await this.client.post('/events', data);
+    return response.data;
+  }
+
+  async getEvents(sessionId?: string, studentId?: string) {
+    const params: any = {};
+    if (sessionId) params.session_id = sessionId;
+    if (studentId) params.student_id = studentId;
+    const response = await this.client.get('/events', { params });
+    return response.data;
+  }
+
   // Risks
   async analyzeRisks(sessionId: string) {
     const response = await this.client.get(`/risks/${sessionId}`);
     return response.data;
   }
 
-  // Evaluations
-  async generateEvaluation(sessionId: string) {
-    const response = await this.client.post(`/evaluations/${sessionId}/generate`);
+  // Risks
+  async getRisks(params?: { session_id?: string }) {
+    const response = await this.client.get('/risks', { params });
     return response.data;
   }
 
-  async getEvaluations(sessionId: string) {
-    const response = await this.client.get(`/evaluations`, { params: { session_id: sessionId } });
+  async analyzeSessionRisks(sessionId: string) {
+    const response = await this.client.post(`/risks/analyze-session/${sessionId}`, {}, {
+      timeout: 60000  // 60 segundos para análisis completo
+    });
+    return response.data;
+  }
+
+  // Evaluations
+  async generateEvaluation(data: { session_id: string; interaction_id?: string }) {
+    const response = await this.client.post('/evaluations/generate', data, {
+      timeout: 120000  // 120 segundos para evaluación con LLM
+    });
+    return response.data;
+  }
+
+  async getEvaluations(params?: { session_id?: string; interaction_id?: string }) {
+    const response = await this.client.get('/evaluations', { params });
     return response.data;
   }
 
   // Traceability
   async getTraceability(traceId: string) {
     const response = await this.client.get(`/traceability/${traceId}`);
+    return response.data;
+  }
+
+  async getSessionTraceability(sessionId: string) {
+    const response = await this.client.get(`/traceability/session/${sessionId}`, {
+      timeout: 45000  // 45 segundos para grafo completo
+    });
     return response.data;
   }
 

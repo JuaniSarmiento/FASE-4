@@ -5,18 +5,21 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel, Field
 from datetime import datetime
+from sqlalchemy.orm import Session
 
 from ...database.repositories import (
     RiskRepository,
     EvaluationRepository,
     SessionRepository,
 )
+from ...database.models import SimulatorEventDB, SessionDB, RiskDB
 from ...models.risk import Risk, RiskLevel, RiskDimension
 from ...models.evaluation import EvaluationReport
 from ..deps import (
     get_risk_repository,
     get_evaluation_repository,
     get_session_repository,
+    get_db,
 )
 from ..schemas.common import APIResponse, PaginatedResponse, PaginationMeta
 from ..exceptions import SessionNotFoundError
@@ -525,4 +528,249 @@ async def get_student_evaluations(
         success=True,
         data=evals_data,
         message=f"Retrieved {len(evals_data)} evaluations for student {student_id}",
+    )
+
+
+# ============================================================================
+# AUTOMATIC RISK ANALYSIS ENGINE (AR-IA)
+# ============================================================================
+
+@router.post(
+    "/analyze-session/{session_id}",
+    response_model=APIResponse[List[RiskResponse]],
+    summary="Analyze Session for Risks",
+    description="Analiza eventos de una sesión y detecta riesgos automáticamente"
+)
+async def analyze_session_risks(
+    session_id: str,
+    session_repo: SessionRepository = Depends(get_session_repository),
+    risk_repo: RiskRepository = Depends(get_risk_repository),
+    db: Session = Depends(get_db),
+) -> APIResponse[List[RiskResponse]]:
+    """
+    Engine de Análisis de Riesgos (AR-IA)
+    
+    Analiza los eventos de una sesión y detecta riesgos automáticamente basándose en:
+    - Eventos del simulador
+    - Patrones de comportamiento
+    - Decisiones tomadas
+    - Omisiones críticas
+    
+    Reglas de detección:
+    1. backlog_created sin acceptance_criteria → RIESGO TÉCNICO (ALTA probabilidad, MEDIO impacto)
+    2. sprint_planning_failed → RIESGO DE GOBERNANZA (MEDIA probabilidad, ALTO impacto)
+    3. technical_decision sin justification → RIESGO DE CALIDAD (ALTA probabilidad, MEDIO impacto)
+    4. security_scan con vulnerabilities → RIESGO DE SEGURIDAD (ALTA probabilidad, CRÍTICO impacto)
+    5. deployment sin tests → RIESGO OPERACIONAL (ALTA probabilidad, ALTO impacto)
+    """
+    # Verificar sesión
+    session = session_repo.get_by_id(session_id)
+    if not session:
+        raise SessionNotFoundError(session_id)
+    
+    # Obtener todos los eventos de la sesión
+    events = db.query(SimulatorEventDB).filter(
+        SimulatorEventDB.session_id == session_id
+    ).order_by(SimulatorEventDB.timestamp).all()
+    
+    if not events:
+        return APIResponse(
+            success=True,
+            data=[],
+            message=f"No events found for session {session_id}, no risks to analyze"
+        )
+    
+    detected_risks = []
+    
+    # REGLA 1: Backlog sin criterios de aceptación
+    for event in events:
+        if event.event_type == "backlog_created":
+            event_data = event.event_data or {}
+            if not event_data.get("has_acceptance_criteria", False):
+                risk = RiskDB(
+                    session_id=session_id,
+                    student_id=session.student_id,
+                    activity_id=session.activity_id,
+                    risk_type="TECHNICAL_DEBT",
+                    risk_level="HIGH",
+                    dimension="Técnico",
+                    description="User stories sin criterios de aceptación claros",
+                    impact="Riesgo de implementación incorrecta, retrabajo y bugs en producción",
+                    evidence=[
+                        f"Backlog creado con {event_data.get('stories_count', 0)} historias",
+                        "No se definieron criterios de aceptación",
+                        f"Evento detectado: {event.timestamp.isoformat()}"
+                    ],
+                    trace_ids=[],
+                    recommendations=[
+                        "Definir criterios de aceptación SMART para cada user story",
+                        "Incluir ejemplos concretos de comportamiento esperado",
+                        "Revisar criterios con el equipo antes de comenzar desarrollo"
+                    ],
+                    detected_by="AR-IA-AUTO",
+                    resolved=False,
+                )
+                db.add(risk)
+                detected_risks.append(risk)
+    
+    # REGLA 2: Sprint planning fallido
+    for event in events:
+        if event.event_type == "sprint_planning_failed":
+            event_data = event.event_data or {}
+            risk = RiskDB(
+                session_id=session_id,
+                student_id=session.student_id,
+                activity_id=session.activity_id,
+                risk_type="PROCESS",
+                risk_level="HIGH",
+                dimension="Gobernanza",
+                description="Sprint planning incompleto o fallido",
+                impact="Riesgo de retrasos, scope creep y falta de alineación del equipo",
+                evidence=[
+                    f"Planning falló: {event_data.get('reason', 'No especificado')}",
+                    f"Evento detectado: {event.timestamp.isoformat()}"
+                ],
+                trace_ids=[],
+                recommendations=[
+                    "Revisar capacidad del equipo y velocity histórico",
+                    "Asegurar presencia de todo el equipo en planning",
+                    "Definir Definition of Done clara antes de comenzar"
+                ],
+                detected_by="AR-IA-AUTO",
+                resolved=False,
+            )
+            db.add(risk)
+            detected_risks.append(risk)
+    
+    # REGLA 3: Decisión técnica sin justificación
+    for event in events:
+        if event.event_type == "technical_decision_made":
+            event_data = event.event_data or {}
+            if not event_data.get("justification"):
+                risk = RiskDB(
+                    session_id=session_id,
+                    student_id=session.student_id,
+                    activity_id=session.activity_id,
+                    risk_type="TECHNICAL_DEBT",
+                    risk_level="MEDIUM",
+                    dimension="Técnico",
+                    description="Decisión técnica sin justificación documentada",
+                    impact="Dificultad para mantener y evolucionar el sistema",
+                    evidence=[
+                        f"Decisión: {event_data.get('decision', 'No especificada')}",
+                        "No hay justificación documentada",
+                        f"Evento detectado: {event.timestamp.isoformat()}"
+                    ],
+                    trace_ids=[],
+                    recommendations=[
+                        "Documentar el razonamiento detrás de decisiones arquitecturales",
+                        "Explicar alternativas consideradas y por qué se descartaron",
+                        "Incluir trade-offs y limitaciones conocidas"
+                    ],
+                    detected_by="AR-IA-AUTO",
+                    resolved=False,
+                )
+                db.add(risk)
+                detected_risks.append(risk)
+    
+    # REGLA 4: Security scan con vulnerabilidades
+    for event in events:
+        if event.event_type == "security_scan_complete":
+            event_data = event.event_data or {}
+            vulnerabilities = event_data.get("vulnerabilities", [])
+            if vulnerabilities:
+                severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+                for vuln in vulnerabilities:
+                    sev = vuln.get("severity", "low").lower()
+                    severity_counts[sev] = severity_counts.get(sev, 0) + 1
+                
+                risk_level = "CRITICAL" if severity_counts["critical"] > 0 else "HIGH"
+                
+                risk = RiskDB(
+                    session_id=session_id,
+                    student_id=session.student_id,
+                    activity_id=session.activity_id,
+                    risk_type="SECURITY",
+                    risk_level=risk_level,
+                    dimension="Seguridad",
+                    description=f"Vulnerabilidades de seguridad detectadas: {len(vulnerabilities)} total",
+                    impact="Riesgo de brechas de seguridad, exposición de datos y ataques",
+                    evidence=[
+                        f"Critical: {severity_counts['critical']}, High: {severity_counts['high']}, Medium: {severity_counts['medium']}, Low: {severity_counts['low']}",
+                        f"Scan realizado: {event.timestamp.isoformat()}",
+                        f"Herramienta: {event_data.get('tool', 'Unknown')}"
+                    ],
+                    trace_ids=[],
+                    recommendations=[
+                        "Priorizar corrección de vulnerabilidades críticas y altas",
+                        "Implementar security hardening según OWASP",
+                        "Configurar análisis de seguridad en CI/CD pipeline"
+                    ],
+                    detected_by="AR-IA-AUTO",
+                    resolved=False,
+                )
+                db.add(risk)
+                detected_risks.append(risk)
+    
+    # REGLA 5: Deployment sin tests
+    for event in events:
+        if event.event_type == "deployment_completed":
+            event_data = event.event_data or {}
+            if not event_data.get("tests_executed", False):
+                risk = RiskDB(
+                    session_id=session_id,
+                    student_id=session.student_id,
+                    activity_id=session.activity_id,
+                    risk_type="OPERATIONAL",
+                    risk_level="HIGH",
+                    dimension="Operacional",
+                    description="Deployment a producción sin ejecutar tests",
+                    impact="Alto riesgo de bugs en producción y downtime",
+                    evidence=[
+                        f"Deployment realizado: {event_data.get('environment', 'production')}",
+                        "No se ejecutaron tests previos al deployment",
+                        f"Evento detectado: {event.timestamp.isoformat()}"
+                    ],
+                    trace_ids=[],
+                    recommendations=[
+                        "Implementar test suite automatizado (unit, integration, e2e)",
+                        "Configurar CI/CD para ejecutar tests antes de deployment",
+                        "Establecer política de 0% deployments sin tests"
+                    ],
+                    detected_by="AR-IA-AUTO",
+                    resolved=False,
+                )
+                db.add(risk)
+                detected_risks.append(risk)
+    
+    # Commit todos los riesgos detectados
+    db.commit()
+    
+    # Refresh y convertir a response
+    response_data = []
+    for risk in detected_risks:
+        db.refresh(risk)
+        response_data.append(
+            RiskResponse(
+                id=risk.id,
+                session_id=risk.session_id,
+                student_id=risk.student_id,
+                activity_id=risk.activity_id,
+                risk_type=risk.risk_type,
+                risk_level=risk.risk_level,
+                dimension=risk.dimension,
+                description=risk.description,
+                evidence=risk.evidence or [],
+                trace_ids=risk.trace_ids or [],
+                recommendations=risk.recommendations or [],
+                resolved=risk.resolved,
+                resolution_notes=risk.resolution_notes,
+                created_at=risk.created_at,
+            )
+        )
+    
+    return APIResponse(
+        success=True,
+        data=response_data,
+        message=f"Analyzed {len(events)} events, detected {len(detected_risks)} risks"
     )

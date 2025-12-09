@@ -88,6 +88,9 @@ class SessionDB(Base, BaseModel):
     evaluations = relationship(
         "EvaluationDB", back_populates="session", cascade="all, delete-orphan"
     )
+    simulator_events = relationship(
+        "SimulatorEventDB", back_populates="session", cascade="all, delete-orphan"
+    )
     # Sprint 6 relationships
     interview_sessions = relationship(
         "InterviewSessionDB", back_populates="session", cascade="all, delete-orphan"
@@ -909,6 +912,53 @@ class LTIDeploymentDB(Base, BaseModel):
         Index('idx_lti_deployment_unique', 'issuer', 'deployment_id', unique=True),
         # Query: Get active deployments
         Index('idx_lti_deployment_active', 'is_active'),
+    )
+
+
+class SimulatorEventDB(Base, BaseModel):
+    """
+    Simulator Events - Captura eventos generados por simuladores
+    
+    Tipos de eventos:
+    - backlog_created: Product Owner creó backlog
+    - sprint_planning_complete: Scrum Master completó planning
+    - sprint_planning_failed: Fallo en planificación
+    - user_story_approved: Historia de usuario aprobada
+    - technical_decision_made: Decisión técnica tomada
+    - risk_identified_by_user: Usuario identificó un riesgo
+    - test_executed: Test ejecutado
+    - deployment_completed: Deployment completado
+    - incident_resolved: Incidente resuelto
+    - security_scan_complete: Scan de seguridad completado
+    """
+
+    __tablename__ = "simulator_events"
+
+    # Event metadata
+    session_id = Column(String(36), ForeignKey("sessions.id"), nullable=False, index=True)
+    student_id = Column(String(100), nullable=False, index=True)
+    simulator_type = Column(String(50), nullable=False, index=True)  # PO, SM, TI, IR, Client, DSO
+    
+    # Event details
+    event_type = Column(String(100), nullable=False, index=True)
+    event_data = Column(JSON, default=dict)  # Datos específicos del evento
+    timestamp = Column(DateTime, default=_utc_now, nullable=False)
+    
+    # Context
+    description = Column(Text, nullable=True)
+    severity = Column(String(20), nullable=True)  # info, warning, critical
+    
+    # Relationships
+    session = relationship("SessionDB", back_populates="simulator_events")
+
+    # Composite indexes
+    __table_args__ = (
+        # Query: Get all events for a session
+        Index('idx_event_session', 'session_id', 'timestamp'),
+        # Query: Get events by type for analysis
+        Index('idx_event_type_student', 'event_type', 'student_id'),
+        # Query: Get events by simulator
+        Index('idx_event_simulator_session', 'simulator_type', 'session_id'),
     )
 
 

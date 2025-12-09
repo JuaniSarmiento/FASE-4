@@ -3,185 +3,232 @@
  */
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { apiClient } from '../services/apiClient';
+import { StatCard, LoadingState, EmptyState } from '../components/ui';
 import './DashboardPage.css';
 
+interface DashboardMetrics {
+  totalSessions: number;
+  activeSessions: number;
+  totalRisks: number;
+  totalTraces: number;
+}
+
 export const DashboardPage: React.FC = () => {
-  const [stats, setStats] = useState({
-    totalSessions: 0,
-    activeSessions: 0,
-    avgScore: 0,
-    riskAlerts: 0,
-  });
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [recentSessions, setRecentSessions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // TODO: Load real stats from API
-    setStats({
-      totalSessions: 24,
-      activeSessions: 3,
-      avgScore: 82.5,
-      riskAlerts: 2,
-    });
+    loadDashboardData();
   }, []);
 
-  const modules = [
-    {
-      title: 'Tutor Cognitivo',
-      description: 'Tutoría socr ática y andamiaje metacognitivo',
-      icon: '🎓',
-      path: '/tutor',
-      color: '#4ade80',
-      features: ['Preguntas socráticas', 'Explicaciones conceptuales', 'Pistas graduadas'],
-    },
-    {
-      title: 'Evaluador de Procesos',
-      description: 'Análisis de razonamiento y procesos cognitivos',
-      icon: '📊',
-      path: '/evaluator',
-      color: '#f59e0b',
-      features: ['Análisis cognitivo', 'Evolución Git', 'Reportes detallados'],
-    },
-    {
-      title: 'Simuladores Profesionales',
-      description: '6 simuladores de roles de la industria',
-      icon: '👥',
-      path: '/simulators',
-      color: '#8b5cf6',
-      features: ['Product Owner', 'Scrum Master', 'Tech Interviewer'],
-    },
-    {
-      title: 'Análisis de Riesgo',
-      description: 'Monitoreo de riesgos cognitivos y éticos',
-      icon: '⚠️',
-      path: '/risks',
-      color: '#ef4444',
-      features: ['5 dimensiones', 'Alertas en tiempo real', 'Intervenciones'],
-    },
-    {
-      title: 'Trazabilidad N4',
-      description: 'Reconstrucción de caminos cognitivos',
-      icon: '🔍',
-      path: '/traceability',
-      color: '#06b6d4',
-      features: ['4 niveles', 'Visualización', 'Secuencias'],
-    },
-    {
-      title: 'Git Integration',
-      description: 'Análisis de evolución de código',
-      icon: '📦',
-      path: '/git',
-      color: '#ec4899',
-      features: ['Commits', 'Patrones', 'Correlación'],
-    },
-  ];
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      
+      // Cargar sesiones recientes
+      const sessionsResponse = await apiClient.getSessions();
+      const sessions = sessionsResponse.data?.items || sessionsResponse.data || [];
+      
+      // Calcular métricas
+      const dashboardMetrics: DashboardMetrics = {
+        totalSessions: sessions.length,
+        activeSessions: sessions.filter((s: any) => s.status === 'active').length,
+        totalRisks: sessions.reduce((acc: number, s: any) => acc + (s.risk_count || 0), 0),
+        totalTraces: sessions.reduce((acc: number, s: any) => acc + (s.trace_count || 0), 0),
+      };
+
+      setMetrics(dashboardMetrics);
+      setRecentSessions(sessions.slice(0, 5)); // Últimas 5 sesiones
+      
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <LoadingState type="skeleton" message="Cargando dashboard..." />;
+  }
 
   return (
-    <div className="dashboard-page">
+    <div className="space-y-6">
       {/* Header */}
-      <header className="dashboard-header">
-        <div>
-          <h1 className="dashboard-title">AI-Native Learning Platform</h1>
-          <p className="dashboard-subtitle">
-            Sistema completo de enseñanza-aprendizaje con IA generativa
-          </p>
-        </div>
-      </header>
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-600 mt-2">Resumen de tu actividad de aprendizaje</p>
+      </div>
 
-      {/* Stats Cards */}
-      <div className="stats-grid">
-        <div className="stat-card" style={{ borderColor: '#667eea' }}>
-          <div className="stat-icon" style={{ background: 'rgba(102, 126, 234, 0.1)' }}>
-            📚
-          </div>
-          <div className="stat-content">
-            <p className="stat-label">Total Sesiones</p>
-            <p className="stat-value">{stats.totalSessions}</p>
-          </div>
-        </div>
+      {/* Métricas Principales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          label="Sesiones Totales"
+          value={metrics?.totalSessions || 0}
+          icon="📊"
+          color="blue"
+        />
+        <StatCard
+          label="Sesiones Activas"
+          value={metrics?.activeSessions || 0}
+          icon="🟢"
+          color="green"
+        />
+        <StatCard
+          label="Riesgos Detectados"
+          value={metrics?.totalRisks || 0}
+          icon="⚠️"
+          color="orange"
+        />
+        <StatCard
+          label="Trazas Cognitivas"
+          value={metrics?.totalTraces || 0}
+          icon="🧠"
+          color="purple"
+        />
+      </div>
 
-        <div className="stat-card" style={{ borderColor: '#4ade80' }}>
-          <div className="stat-icon" style={{ background: 'rgba(74, 222, 128, 0.1)' }}>
-            ⚡
-          </div>
-          <div className="stat-content">
-            <p className="stat-label">Sesiones Activas</p>
-            <p className="stat-value">{stats.activeSessions}</p>
-          </div>
-        </div>
+      {/* Acciones Rápidas */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Acciones Rápidas</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Link
+            to="/tutor"
+            className="flex items-center p-4 border-2 border-blue-200 rounded-lg hover:bg-blue-50 transition-colors group"
+          >
+            <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+              💬
+            </div>
+            <div className="ml-4">
+              <h3 className="font-semibold text-gray-900">Nueva Sesión Tutor</h3>
+              <p className="text-sm text-gray-600">Aprende con el tutor IA</p>
+            </div>
+          </Link>
 
-        <div className="stat-card" style={{ borderColor: '#f59e0b' }}>
-          <div className="stat-icon" style={{ background: 'rgba(245, 158, 11, 0.1)' }}>
-            📈
-          </div>
-          <div className="stat-content">
-            <p className="stat-label">Puntaje Promedio</p>
-            <p className="stat-value">{stats.avgScore.toFixed(1)}%</p>
-          </div>
-        </div>
+          <Link
+            to="/simulators"
+            className="flex items-center p-4 border-2 border-green-200 rounded-lg hover:bg-green-50 transition-colors group"
+          >
+            <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+              🎯
+            </div>
+            <div className="ml-4">
+              <h3 className="font-semibold text-gray-900">Continuar Simulador</h3>
+              <p className="text-sm text-gray-600">Practica con profesionales</p>
+            </div>
+          </Link>
 
-        <div className="stat-card" style={{ borderColor: '#ef4444' }}>
-          <div className="stat-icon" style={{ background: 'rgba(239, 68, 68, 0.1)' }}>
-            ⚠️
-          </div>
-          <div className="stat-content">
-            <p className="stat-label">Alertas de Riesgo</p>
-            <p className="stat-value">{stats.riskAlerts}</p>
-          </div>
+          <Link
+            to="/test"
+            className="flex items-center p-4 border-2 border-purple-200 rounded-lg hover:bg-purple-50 transition-colors group"
+          >
+            <div className="flex-shrink-0 w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+              🧪
+            </div>
+            <div className="ml-4">
+              <h3 className="font-semibold text-gray-900">Ejecutar Pruebas</h3>
+              <p className="text-sm text-gray-600">Valida el sistema completo</p>
+            </div>
+          </Link>
         </div>
       </div>
 
-      {/* Modules Grid */}
-      <section className="modules-section">
-        <h2 className="section-title">Módulos del Sistema</h2>
-        <div className="modules-grid">
-          {modules.map((module) => (
-            <Link
-              key={module.path}
-              to={module.path}
-              className="module-card"
-              style={{
-                '--module-color': module.color,
-              } as React.CSSProperties}
-            >
-              <div className="module-header">
-                <span className="module-icon">{module.icon}</span>
-                <h3 className="module-title">{module.title}</h3>
-              </div>
-              <p className="module-description">{module.description}</p>
-              <ul className="module-features">
-                {module.features.map((feature, idx) => (
-                  <li key={idx}>• {feature}</li>
-                ))}
-              </ul>
-              <div className="module-footer">
-                <span className="module-action">Explorar →</span>
-              </div>
+      {/* Actividad Reciente */}
+      <div className="bg-white rounded-lg shadow">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-gray-900">Actividad Reciente</h2>
+            <Link to="/sessions" className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+              Ver todas →
             </Link>
-          ))}
+          </div>
         </div>
-      </section>
+        
+        <div className="p-6">
+          {recentSessions.length === 0 ? (
+            <EmptyState
+              icon="📋"
+              title="No hay sesiones todavía"
+              description="Crea tu primera sesión para comenzar a aprender"
+              action={
+                <Link
+                  to="/sessions"
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Crear Sesión
+                </Link>
+              }
+            />
+          ) : (
+            <div className="space-y-3">
+              {recentSessions.map((session: any) => (
+                <div
+                  key={session.id}
+                  className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-xl">
+                      {session.mode === 'TUTOR' ? '💬' : '🎯'}
+                    </div>
+                    <div>
+                      <h3 className="font-medium text-gray-900">
+                        {session.activity_id}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {new Date(session.created_at).toLocaleDateString('es-ES', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <div className="text-right">
+                      <div className="text-sm text-gray-600">
+                        {session.trace_count || 0} trazas
+                      </div>
+                      {session.risk_count > 0 && (
+                        <div className="text-sm text-orange-600">
+                          {session.risk_count} riesgos
+                        </div>
+                      )}
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      session.status === 'active' 
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {session.status === 'active' ? 'Activa' : 'Completada'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
-      {/* Quick Actions */}
-      <section className="quick-actions">
-        <h2 className="section-title">Acciones Rápidas</h2>
-        <div className="actions-grid">
-          <button className="action-btn" style={{ background: 'linear-gradient(135deg, #4ade80 0%, #22c55e 100%)' }}>
-            <span className="action-icon">➕</span>
-            <span>Nueva Sesión</span>
-          </button>
-          <button className="action-btn" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-            <span className="action-icon">📖</span>
-            <span>Ver Historial</span>
-          </button>
-          <button className="action-btn" style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)' }}>
-            <span className="action-icon">📊</span>
-            <span>Generar Reporte</span>
-          </button>
-          <button className="action-btn" style={{ background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)' }}>
-            <span className="action-icon">⚙️</span>
-            <span>Configuración</span>
-          </button>
+      {/* Test Suite Banner */}
+      <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg shadow-lg p-6 text-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold mb-2">🧪 Suite de Pruebas Completa</h2>
+            <p className="text-green-100">
+              Valida todas las funcionalidades: Tutor, 6 Simuladores, Riesgos, Evaluaciones y más
+            </p>
+          </div>
+          <Link
+            to="/test"
+            className="bg-white text-green-600 px-6 py-3 rounded-lg font-semibold hover:bg-green-50 transition-colors whitespace-nowrap"
+          >
+            Ejecutar Pruebas →
+          </Link>
         </div>
-      </section>
+      </div>
     </div>
   );
 };

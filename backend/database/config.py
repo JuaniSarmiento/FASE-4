@@ -214,3 +214,24 @@ def get_session() -> Session:
     db_config = get_db_config()
     session_factory = db_config.get_session_factory()
     return session_factory()
+
+
+def get_db():
+    """
+    Dependency for FastAPI to get database session
+    
+    Usage:
+        @app.get("/users")
+        def get_users(db: Session = Depends(get_db)):
+            return db.query(User).all()
+    """
+    db = get_session()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# Aliases for compatibility
+SessionLocal = get_db_config().get_session_factory()
+engine = get_db_config().get_engine()

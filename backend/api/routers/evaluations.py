@@ -177,11 +177,18 @@ IMPORTANTE: Responde SOLO el JSON, sin texto adicional."""
 
         # 5. Llamar a Ollama para análisis
         try:
-            llm_response = await llm_provider.generate(
-                prompt=prompt,
+            from ...llm.base import LLMMessage, LLMRole
+            
+            llm_response_obj = await llm_provider.generate(
+                messages=[
+                    LLMMessage(role=LLMRole.USER, content=prompt)
+                ],
                 temperature=0.3,  # Baja temperatura para respuestas consistentes
                 max_tokens=2000,
             )
+            
+            # Extraer contenido del LLMResponse
+            llm_response = llm_response_obj.content
             
             # Intentar parsear JSON
             eval_data = json.loads(llm_response)
