@@ -3,7 +3,7 @@ Router para gestión de sesiones de aprendizaje
 """
 from typing import List, Optional, Dict, Any
 from datetime import datetime, date
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Body
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func, select, and_
 from collections import Counter
@@ -737,3 +737,207 @@ async def get_session_history(
         data=history_response,
         message=f"Session history retrieved successfully for student {student_id}"
     )
+
+
+@router.post(
+    "/create-tutor",
+    response_model=APIResponse[Dict[str, Any]],
+    summary="Create Tutor Session V2.0",
+    description="Crea una sesión de tutor socrático V2.0 y retorna mensaje de bienvenida",
+)
+async def create_tutor_session(
+    session_repo: SessionRepository = Depends(get_session_repository),
+) -> APIResponse[Dict[str, Any]]:
+    """
+    Crea una nueva sesión para el Tutor Socrático V2.0.
+    
+    Returns:
+        APIResponse con session_id y welcome_message
+    """
+    # Crear sesión en la base de datos
+    db_session = session_repo.create(
+        student_id="demo_student",  # Por ahora usamos un estudiante demo
+        activity_id=f"tutor_session_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+        mode="TUTOR"
+    )
+    
+    # Mensaje de bienvenida con las 4 reglas
+    welcome_message = """¡Hola! Soy tu **Tutor Socrático IA V2.0**.
+
+🎯 Mi objetivo es guiar tu aprendizaje, no darte soluciones directas.
+
+Opero bajo **4 reglas inquebrantables**:
+
+1. 🚫 **No daré código completo** - te guiaré con preguntas
+
+2. ❓ **Modo socrático prioritario** - pregunto antes que responder
+
+3. 💭 **Exijo que expliques tu razonamiento** - convierte tu pensamiento en palabras
+
+4. 📚 **Refuerzo conceptual** - te enseño fundamentos, no parches
+
+¿En qué necesitás ayuda hoy?"""
+    
+    logger.info(f"Tutor session created: {db_session.id}")
+    
+    return APIResponse(
+        success=True,
+        data={
+            "session_id": db_session.id,
+            "welcome_message": welcome_message
+        },
+        message="Tutor session created successfully"
+    )
+
+
+@router.post(
+    "/{session_id}/interact",
+    response_model=APIResponse[Dict[str, Any]],
+    summary="Interact with Tutor V2.0",
+    description="Procesa un mensaje del estudiante con el Tutor Socrático V2.0",
+)
+async def interact_with_tutor(
+    session_id: str,
+    request_data: Dict[str, Any] = Body(...),
+    session_repo: SessionRepository = Depends(get_session_repository),
+) -> APIResponse[Dict[str, Any]]:
+    """
+    Procesa la interacción del estudiante con el Tutor Socrático V2.0.
+    
+    Args:
+        session_id: ID de la sesión
+        request_data: Dict con 'message' y 'student_profile'
+    
+    Returns:
+        Dict con response y metadata V2.0
+    """
+    from ...agents.tutor import TutorCognitivoAgent
+    from ...llm import LLMProviderFactory
+    
+    message = request_data.get("message", "")
+    student_profile = request_data.get("student_profile", {})
+    
+    # Verificar que la sesión existe
+    db_session = session_repo.get_by_id(session_id)
+    if not db_session:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Session {session_id} not found"
+        )
+    
+    # Inicializar LLM provider (Ollama) usando variables de entorno
+    llm_provider = LLMProviderFactory.create_from_env()
+    
+    # Inicializar tutor con LLM
+    try:
+        tutor = TutorCognitivoAgent(llm_provider=llm_provider)
+    except Exception as e:
+        logger.error(f"Error initializing TutorCognitivoAgent: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error initializing tutor: {str(e)}"
+        )
+    
+    # Procesar con Tutor V2.0
+    try:
+        result = await tutor.process_student_request(
+            session_id=session_id,
+            student_prompt=message,
+            student_profile=student_profile or {},
+            conversation_history=None
+        )
+        
+        logger.info(
+            f"Tutor V2.0 interaction processed",
+            extra={
+                "session_id": session_id,
+                "intervention_type": result.get("intervention_type"),
+                "semaforo": result.get("semaforo")
+            }
+        )
+        
+        return APIResponse(
+            success=True,
+            data={
+                "response": result.get("message", ""),  # El método retorna 'message', no 'response'
+                "metadata": {
+                    "intervention_type": result.get("intervention_type"),
+                    "semaforo": result.get("semaforo"),
+                    "help_level": result.get("help_level"),
+                    "requires_student_response": result.get("requires_student_response", True),
+                    "cognitive_events": result.get("cognitive_events", []),
+                    "rule_violations": result.get("rule_violations", [])
+                }
+            },
+            message="Interaction processed successfully"
+        )
+    except Exception as e:
+        logger.error(f"Error processing tutor interaction: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing interaction: {str(e)}"
+        )
+
+
+@router.get(
+    "/{session_id}/analytics-n4",
+    response_model=APIResponse[Dict[str, Any]],
+    summary="Get Session Analytics N4",
+    description="Obtiene analytics completos de la sesión (trazabilidad N4)",
+)
+async def get_session_analytics_n4(
+    session_id: str,
+    session_repo: SessionRepository = Depends(get_session_repository),
+) -> APIResponse[Dict[str, Any]]:
+    """
+    Obtiene analytics N4 de una sesión del tutor.
+    
+    Args:
+        session_id: ID de la sesión
+    
+    Returns:
+        Dict con estadísticas completas de la sesión
+    """
+    from ...agents.tutor import TutorCognitivoAgent
+    
+    # Verificar que la sesión existe
+    db_session = session_repo.get_by_id(session_id)
+    if not db_session:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Session {session_id} not found"
+        )
+    
+    # Inicializar tutor y obtener analytics
+    tutor = TutorCognitivoAgent()
+    
+    try:
+        analytics = tutor.get_session_analytics_n4(session_id)
+        
+        logger.info(
+            f"Analytics N4 retrieved",
+            extra={
+                "session_id": session_id,
+                "total_messages": analytics.get("total_messages", 0)
+            }
+        )
+        
+        return APIResponse(
+            success=True,
+            data=analytics,
+            message="Analytics retrieved successfully"
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving analytics: {str(e)}")
+        # Devolver analytics vacíos en caso de error
+        return APIResponse(
+            success=True,
+            data={
+                "total_messages": 0,
+                "semaforo_distribution": {"verde": 0, "amarillo": 0, "rojo": 0},
+                "intervention_types": {},
+                "cognitive_events": [],
+                "student_progression": {}
+            },
+            message="Analytics retrieved (empty - no data available)"
+        )

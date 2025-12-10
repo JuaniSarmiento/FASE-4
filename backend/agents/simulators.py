@@ -34,38 +34,56 @@ class SimuladorProfesionalAgent:
     5. Generar evidencia para evaluación formativa
     """
 
-    def __init__(self, simulator_type: SimuladorType, llm_provider=None, config: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self, 
+        simulator_type: SimuladorType, 
+        llm_provider=None, 
+        trace_repo=None,
+        config: Optional[Dict[str, Any]] = None
+    ):
         self.simulator_type = simulator_type
         self.llm_provider = llm_provider
+        self.trace_repo = trace_repo
         self.config = config or {}
         self.context = {}
 
-    async def interact(self, student_input: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def interact(
+        self, 
+        student_input: str, 
+        context: Optional[Dict[str, Any]] = None,
+        session_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Interactúa según el rol del simulador.
 
         SPRINT 4: Si llm_provider está disponible, usa respuestas dinámicas.
         Si no, usa respuestas predefinidas (fallback para testing).
+        
+        Args:
+            student_input: Prompt del estudiante
+            context: Contexto adicional de la conversación
+            session_id: ID de sesión para recuperar historial de conversación
         """
         if self.simulator_type == SimuladorType.PRODUCT_OWNER:
-            return await self._interact_as_product_owner(student_input, context)
+            return await self._interact_as_product_owner(student_input, context, session_id)
         elif self.simulator_type == SimuladorType.SCRUM_MASTER:
-            return await self._interact_as_scrum_master(student_input, context)
+            return await self._interact_as_scrum_master(student_input, context, session_id)
         elif self.simulator_type == SimuladorType.TECH_INTERVIEWER:
-            return await self._interact_as_interviewer(student_input, context)
+            return await self._interact_as_interviewer(student_input, context, session_id)
         elif self.simulator_type == SimuladorType.INCIDENT_RESPONDER:
-            return await self._interact_as_incident_responder(student_input, context)
+            return await self._interact_as_incident_responder(student_input, context, session_id)
         elif self.simulator_type == SimuladorType.DEVSECOPS:
-            return await self._interact_as_devsecops(student_input, context)
+            return await self._interact_as_devsecops(student_input, context, session_id)
         elif self.simulator_type == SimuladorType.CLIENT:
-            return await self._interact_as_client(student_input, context)
+            return await self._interact_as_client(student_input, context, session_id)
         else:
             return {"message": "Simulador en desarrollo", "metadata": {}}
 
     async def _interact_as_product_owner(
         self,
         student_input: str,
-        context: Optional[Dict[str, Any]]
+        context: Optional[Dict[str, Any]],
+        session_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Simula Product Owner"""
         # Si hay LLM provider disponible, usar respuesta dinámica
@@ -80,7 +98,8 @@ Evalúas: comunicación técnica, análisis de requisitos, priorización, justif
                 student_input=student_input,
                 context=context,
                 competencies=["comunicacion_tecnica", "analisis_requisitos", "priorizacion", "justificacion_decisiones"],
-                expects=["criterios_aceptacion", "justificacion_tecnica", "analisis_alternativas"]
+                expects=["criterios_aceptacion", "justificacion_tecnica", "analisis_alternativas"],
+                session_id=session_id
             )
 
         # Fallback: respuesta predefinida
@@ -109,7 +128,8 @@ Necesito justificaciones técnicas sólidas para priorizar esto en el backlog.
     async def _interact_as_scrum_master(
         self,
         student_input: str,
-        context: Optional[Dict[str, Any]]
+        context: Optional[Dict[str, Any]],
+        session_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Simula Scrum Master"""
         # Si hay LLM provider disponible, usar respuesta dinámica
@@ -123,7 +143,8 @@ Evalúas: gestión de tiempo, comunicación, identificación de impedimentos, au
                 student_input=student_input,
                 context=context,
                 competencies=["gestion_tiempo", "comunicacion", "identificacion_impedimentos", "auto_organizacion"],
-                expects=["status_update", "impediments", "plan"]
+                expects=["status_update", "impediments", "plan"],
+                session_id=session_id
             )
 
         # Fallback: respuesta predefinida
@@ -152,7 +173,8 @@ pasando? ¿Necesitamos re-estimar o hay deuda técnica no considerada?
     async def _interact_as_interviewer(
         self,
         student_input: str,
-        context: Optional[Dict[str, Any]]
+        context: Optional[Dict[str, Any]],
+        session_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Simula entrevista técnica"""
         # Si hay LLM provider disponible, usar respuesta dinámica
@@ -167,7 +189,8 @@ Evalúas: dominio conceptual, análisis algorítmico, comunicación técnica, ra
                 student_input=student_input,
                 context=context,
                 competencies=["dominio_conceptual", "analisis_algoritmico", "comunicacion_tecnica", "razonamiento_en_voz_alta"],
-                expects=["explicacion_conceptual", "ejemplos", "analisis_complejidad"]
+                expects=["explicacion_conceptual", "ejemplos", "analisis_complejidad"],
+                session_id=session_id
             )
 
         # Fallback: respuesta predefinida
@@ -195,7 +218,8 @@ Justificá tu respuesta con análisis de complejidad.
     async def _interact_as_devsecops(
         self,
         student_input: str,
-        context: Optional[Dict[str, Any]]
+        context: Optional[Dict[str, Any]],
+        session_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Simula analista DevSecOps"""
         # Si hay LLM provider disponible, usar respuesta dinámica
@@ -210,7 +234,8 @@ Evalúas: seguridad, análisis de vulnerabilidades, gestión de riesgo, cumplimi
                 student_input=student_input,
                 context=context,
                 competencies=["seguridad", "analisis_vulnerabilidades", "gestion_riesgo", "cumplimiento"],
-                expects=["plan_remediacion", "analisis_riesgo", "estrategia_testing"]
+                expects=["plan_remediacion", "analisis_riesgo", "estrategia_testing"],
+                session_id=session_id
             )
 
         # Fallback: respuesta predefinida
@@ -241,7 +266,8 @@ He detectado varias vulnerabilidades en tu código:
     async def _interact_as_incident_responder(
         self,
         student_input: str,
-        context: Optional[Dict[str, Any]]
+        context: Optional[Dict[str, Any]],
+        session_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         SPRINT 4: Simula un Incident Responder (IR-IA)
@@ -260,7 +286,8 @@ Evalúas: diagnóstico sistemático, priorización bajo presión, documentación
                 student_input=student_input,
                 context=context,
                 competencies=["diagnostico_sistematico", "priorizacion", "documentacion", "manejo_presion"],
-                expects=["diagnostico", "plan_accion", "hotfix_propuesto", "post_mortem"]
+                expects=["diagnostico", "plan_accion", "hotfix_propuesto", "post_mortem"],
+                session_id=session_id
             )
 
         # Fallback: respuesta predefinida
@@ -303,7 +330,8 @@ Necesito respuestas en <5 minutos. El CEO está preguntando cuándo volvemos onl
     async def _interact_as_client(
         self,
         student_input: str,
-        context: Optional[Dict[str, Any]]
+        context: Optional[Dict[str, Any]],
+        session_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         SPRINT 4: Simula un Cliente (CX-IA)
@@ -322,7 +350,8 @@ Evalúas: elicitación de requisitos, negociación, empatía, gestión de expect
                 student_input=student_input,
                 context=context,
                 competencies=["elicitacion_requisitos", "negociacion", "empatia", "gestion_expectativas"],
-                expects=["clarificacion_requisitos", "propuesta_alternativas", "justificacion_negocio"]
+                expects=["clarificacion_requisitos", "propuesta_alternativas", "justificacion_negocio"],
+                session_id=session_id
             )
 
         # Fallback: respuesta predefinida
@@ -362,10 +391,13 @@ Ah, y tiene que estar lista en 2 semanas porque mi cuñado dijo que puede conseg
         student_input: str,
         context: Optional[Dict[str, Any]],
         competencies: List[str],
-        expects: List[str]
+        expects: List[str],
+        session_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         SPRINT 4: Genera respuesta dinámica usando LLM provider (Gemini/OpenAI).
+        
+        ✅ NUEVO: Ahora soporta memoria de conversación mediante session_id.
 
         Args:
             role: Rol del simulador (e.g., "Scrum Master", "Product Owner")
@@ -374,29 +406,44 @@ Ah, y tiene que estar lista en 2 semanas porque mi cuñado dijo que puede conseg
             context: Contexto adicional de la conversación
             competencies: Competencias a evaluar
             expects: Qué se espera en la respuesta del estudiante
+            session_id: ID de sesión para cargar historial de conversación
 
         Returns:
             Dict con mensaje, role, expects, metadata (competencias + análisis)
         """
         try:
             from ..llm.base import LLMMessage, LLMRole
+            from ..models.cognitive_trace import InteractionType
 
             # Construir contexto completo
             context_str = ""
             if context:
                 context_str = f"\n\nContexto adicional:\n{context}"
 
-            # Construir mensajes
+            # Construir mensajes: empezar con system prompt
             messages = [
                 LLMMessage(
                     role=LLMRole.SYSTEM,
                     content=f"{system_prompt}{context_str}"
-                ),
+                )
+            ]
+            
+            # ✅ NUEVO: Cargar historial de conversación si hay session_id
+            if session_id and self.trace_repo:
+                conversation_history = self._load_conversation_history(session_id)
+                messages.extend(conversation_history)
+                logger.info(
+                    f"Loaded {len(conversation_history)} messages from conversation history",
+                    extra={"session_id": session_id, "role": role}
+                )
+            
+            # Agregar el prompt actual del estudiante
+            messages.append(
                 LLMMessage(
                     role=LLMRole.USER,
                     content=student_input
                 )
-            ]
+            )
 
             # Generar respuesta
             logger.info(f"Generando respuesta con LLM para rol: {role}")
@@ -496,6 +543,70 @@ Ah, y tiene que estar lista en 2 semanas porque mi cuñado dijo que puede conseg
             scores[competency] = min(score, 1.0)
 
         return scores
+
+    def _load_conversation_history(
+        self,
+        session_id: str
+    ) -> List:
+        """
+        ✅ NUEVO: Carga el historial de conversación de esta sesión como mensajes LLM.
+        
+        Recupera todas las trazas de la sesión y las convierte al formato de mensajes
+        que espera el LLM provider, manteniendo el contexto completo de la conversación.
+        
+        Args:
+            session_id: ID de la sesión actual
+        
+        Returns:
+            Lista de LLMMessage con el historial formateado
+        """
+        if self.trace_repo is None:
+            logger.warning("No trace repository available for conversation history")
+            return []
+        
+        try:
+            from ..llm.base import LLMMessage, LLMRole
+            from ..models.cognitive_trace import InteractionType
+            
+            # Recuperar todas las trazas de esta sesión
+            db_traces = self.trace_repo.get_by_session(session_id)
+            
+            messages = []
+            for trace in db_traces:
+                # Agregar mensaje del usuario (STUDENT_PROMPT)
+                if trace.interaction_type == InteractionType.STUDENT_PROMPT.value and trace.content:
+                    messages.append(
+                        LLMMessage(
+                            role=LLMRole.USER,
+                            content=trace.content
+                        )
+                    )
+                
+                # Agregar respuesta del asistente (AI_RESPONSE o TUTOR_INTERVENTION)
+                elif trace.interaction_type in [
+                    InteractionType.AI_RESPONSE.value,
+                    InteractionType.TUTOR_INTERVENTION.value
+                ] and trace.content:
+                    messages.append(
+                        LLMMessage(
+                            role=LLMRole.ASSISTANT,
+                            content=trace.content
+                        )
+                    )
+            
+            logger.info(
+                f"Loaded conversation history: {len(messages)} messages",
+                extra={"session_id": session_id}
+            )
+            return messages
+            
+        except Exception as e:
+            logger.error(
+                f"Error loading conversation history: {e}",
+                exc_info=True,
+                extra={"session_id": session_id}
+            )
+            return []
 
     # ========================================================================
     # SPRINT 6: Métodos especializados para IT-IA (Technical Interviewer)

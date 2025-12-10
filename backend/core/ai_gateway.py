@@ -453,15 +453,15 @@ Esto no es una limitación arbitraria: el objetivo es que desarrolles tu capacid
         else:
             # Cache MISS - generar respuesta nueva
             if response_type == "socratic_questioning":
-                message = await self._generate_socratic_response(prompt, strategy)
+                message = await self._generate_socratic_response(prompt, strategy, session_id)
             elif response_type == "conceptual_explanation":
-                message = await self._generate_conceptual_explanation(prompt, strategy)
+                message = await self._generate_conceptual_explanation(prompt, strategy, session_id)
             elif response_type == "guided_hints":
-                message = await self._generate_guided_hints(prompt, strategy)
+                message = await self._generate_guided_hints(prompt, strategy, session_id)
             else:
                 # Fallback: usar explicación conceptual para casos no clasificados
                 logger.warning(f"Unknown response_type '{response_type}', using conceptual_explanation")
-                message = await self._generate_conceptual_explanation(prompt, strategy)
+                message = await self._generate_conceptual_explanation(prompt, strategy, session_id)
 
             # Guardar en cache para futuras solicitudes idénticas
             if self.cache is not None:
@@ -483,8 +483,14 @@ Esto no es una limitación arbitraria: el objetivo es que desarrolles tu capacid
             }
         }
 
-    async def _generate_socratic_response(self, prompt: str, strategy: Dict[str, Any]) -> str:
-        """Genera respuesta socrática (preguntas guía) usando LLM"""
+    async def _generate_socratic_response(self, prompt: str, strategy: Dict[str, Any], session_id: str = None) -> str:
+        """✅ Genera respuesta socrática con memoria de conversación"""
+        # Recuperar historial de conversación si hay session_id
+        conversation_history = []
+        if session_id and self.trace_repo:
+            conversation_history = self._load_conversation_history(session_id)
+        
+        # Construir mensajes con historial + system prompt + prompt actual
         messages = [
             LLMMessage(
                 role=LLMRole.SYSTEM,
@@ -497,12 +503,19 @@ NO des la respuesta directa. Haz preguntas que:
 4. Lo ayuden a encontrar la solución por sí mismo
 
 Sé breve y preciso. Máximo 4-5 preguntas."""
-            ),
+            )
+        ]
+        
+        # Agregar historial de conversación
+        messages.extend(conversation_history)
+        
+        # Agregar prompt actual
+        messages.append(
             LLMMessage(
                 role=LLMRole.USER,
                 content=f"Pregunta: {prompt}"
             )
-        ]
+        )
         
         try:
             response = await self.llm.generate(messages, max_tokens=300, temperature=0.7)
@@ -512,8 +525,13 @@ Sé breve y preciso. Máximo 4-5 preguntas."""
             # Circuit Breaker: Fallback cuando Ollama está inaccesible
             return self._get_fallback_socratic_response(prompt)
 
-    async def _generate_conceptual_explanation(self, prompt: str, strategy: Dict[str, Any]) -> str:
-        """Genera explicación conceptual usando LLM"""
+    async def _generate_conceptual_explanation(self, prompt: str, strategy: Dict[str, Any], session_id: str = None) -> str:
+        """✅ Genera explicación conceptual con memoria de conversación"""
+        # Recuperar historial de conversación si hay session_id
+        conversation_history = []
+        if session_id and self.trace_repo:
+            conversation_history = self._load_conversation_history(session_id)
+        
         messages = [
             LLMMessage(
                 role=LLMRole.SYSTEM,
@@ -526,12 +544,19 @@ Estructura tu explicación:
 4. Aplicación práctica
 
 Usa markdown para formato. Sé claro y conciso (máximo 200 palabras)."""
-            ),
+            )
+        ]
+        
+        # Agregar historial
+        messages.extend(conversation_history)
+        
+        # Agregar prompt actual
+        messages.append(
             LLMMessage(
                 role=LLMRole.USER,
                 content=f"Pregunta: {prompt}"
             )
-        ]
+        )
         
         try:
             response = await self.llm.generate(messages, max_tokens=400, temperature=0.7)
@@ -541,8 +566,13 @@ Usa markdown para formato. Sé claro y conciso (máximo 200 palabras)."""
             # Circuit Breaker: Fallback cuando Ollama está inaccesible
             return self._get_fallback_conceptual_explanation(prompt)
 
-    async def _generate_guided_hints(self, prompt: str, strategy: Dict[str, Any]) -> str:
-        """Genera pistas guiadas usando LLM"""
+    async def _generate_guided_hints(self, prompt: str, strategy: Dict[str, Any], session_id: str = None) -> str:
+        """✅ Genera pistas guiadas con memoria de conversación"""
+        # Recuperar historial de conversación si hay session_id
+        conversation_history = []
+        if session_id and self.trace_repo:
+            conversation_history = self._load_conversation_history(session_id)
+        
         messages = [
             LLMMessage(
                 role=LLMRole.SYSTEM,
@@ -555,12 +585,19 @@ Proporciona 3-4 pistas que:
 4. Sugieran un próximo paso concreto
 
 Cada pista debe acercar al estudiante a la solución sin dársela directamente."""
-            ),
+            )
+        ]
+        
+        # Agregar historial
+        messages.extend(conversation_history)
+        
+        # Agregar prompt actual
+        messages.append(
             LLMMessage(
                 role=LLMRole.USER,
                 content=f"Pregunta: {prompt}"
             )
-        ]
+        )
         
         try:
             response = await self.llm.generate(messages, max_tokens=350, temperature=0.7)
@@ -698,6 +735,98 @@ Por favor, reformulá tu pregunta con más detalles.
                     session_id=db_trace.session_id,
                     student_id=db_trace.student_id,
                     activity_id=db_trace.activity_id,
+                    trace_level=db_trace.trace_level,
+                    interaction_type=db_trace.interaction_type,
+                    content=db_trace.content
+                )
+                traces.append(trace)
+            except Exception as e:
+                logger.error(f"Error converting trace: {e}")
+        
+        return traces
+    
+    def _load_conversation_history(
+        self,
+        session_id: str
+    ) -> List[LLMMessage]:
+        """
+        ✅ NUEVO: Carga el historial de conversación de esta sesión como mensajes LLM.
+        
+        Recupera todas las trazas de la sesión y las convierte al formato de mensajes
+        que espera el LLM provider, manteniendo el contexto completo de la conversación.
+        
+        Args:
+            session_id: ID de la sesión actual
+        
+        Returns:
+            Lista de LLMMessage con el historial formateado
+        """
+        if self.trace_repo is None:
+            logger.warning("No trace repository available for conversation history")
+            return []
+        
+        try:
+            # Recuperar todas las trazas de esta sesión
+            db_traces = self.trace_repo.get_by_session(session_id)
+            
+            messages = []
+            for trace in db_traces:
+                # Agregar mensaje del usuario (STUDENT_PROMPT)
+                if trace.interaction_type == InteractionType.STUDENT_PROMPT.value and trace.content:
+                    messages.append(
+                        LLMMessage(
+                            role=LLMRole.USER,
+                            content=trace.content
+                        )
+                    )
+                
+                # Agregar respuesta del asistente (AI_RESPONSE o TUTOR_INTERVENTION)
+                elif trace.interaction_type in [
+                    InteractionType.AI_RESPONSE.value,
+                    InteractionType.TUTOR_INTERVENTION.value
+                ] and trace.content:
+                    messages.append(
+                        LLMMessage(
+                            role=LLMRole.ASSISTANT,
+                            content=trace.content
+                        )
+                    )
+            
+            logger.info(
+                f"Loaded conversation history: {len(messages)} messages",
+                extra={"session_id": session_id}
+            )
+            return messages
+            
+        except Exception as e:
+            logger.error(
+                f"Error loading conversation history: {e}",
+                exc_info=True,
+                extra={"session_id": session_id}
+            )
+            return []
+    
+    def _get_student_history(
+        self,
+        student_id: str,
+        activity_id: Optional[str] = None
+    ) -> List[CognitiveTrace]:
+        """Obtiene el historial de trazas del estudiante desde BD (STATELESS)"""
+        if self.trace_repo is None:
+            return []  # Backward compatibility
+
+        # ✅ STATELESS: Leer desde BD
+        db_traces = self.trace_repo.get_by_student(student_id, limit=100)
+
+        # Convertir de ORM a Pydantic
+        traces = []
+        for db_trace in db_traces:
+            try:
+                trace = CognitiveTrace(
+                    id=db_trace.id,
+                    session_id=db_trace.session_id,
+                    student_id=db_trace.student_id,
+                    activity_id=db_trace.activity_id,
                     trace_level=TraceLevel(db_trace.trace_level),
                     interaction_type=InteractionType(db_trace.interaction_type),
                     content=db_trace.content or "",
@@ -714,8 +843,8 @@ Por favor, reformulá tu pregunta con más detalles.
                     exc_info=True,
                     extra={
                         "trace_id": db_trace.id if hasattr(db_trace, 'id') else 'unknown',
-                        "session_id": db_trace.session_id if hasattr(db_trace, 'session_id') else 'unknown',  # ✅ Fixed: use db_trace.session_id
-                        "student_id": student_id  # ✅ This is in scope (function parameter)
+                        "session_id": db_trace.session_id if hasattr(db_trace, 'session_id') else 'unknown',
+                        "student_id": student_id
                     }
                 )
                 continue

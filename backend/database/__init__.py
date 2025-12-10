@@ -9,7 +9,7 @@ Provides:
 - Repository pattern implementations
 - Transaction management utilities
 """
-from .config import DatabaseConfig, get_db_session, init_database
+from .config import DatabaseConfig, get_db_session, init_database, get_db_config
 from .base import Base
 from .transaction import transaction, transactional, TransactionManager
 
@@ -61,6 +61,7 @@ __all__ = [
     "DatabaseConfig",
     "get_db_session",
     "init_database",
+    "get_db_config",
     "Base",
     # Transaction management
     "transaction",

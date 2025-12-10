@@ -162,16 +162,20 @@ async def interact_with_simulator(
     agent_simulator_type = simulator_type_map[request.simulator_type]
 
     # Crear simulador (SPRINT 4: con LLM provider inyectado)
+    # ✅ NUEVO: Ahora también inyectamos trace_repo para memoria de conversación
     simulator = SimuladorProfesionalAgent(
         simulator_type=agent_simulator_type,
         llm_provider=llm_provider,  # SPRINT 4: Usa Gemini/OpenAI configurado en .env
+        trace_repo=trace_repo,  # ✅ Para cargar historial de conversación
         config={"context": request.context or {}}
     )
 
     # Procesar interacción
+    # ✅ NUEVO: Ahora pasamos session_id para habilitar memoria de conversación
     response = await simulator.interact(
         student_input=request.prompt,
-        context=request.context
+        context=request.context,
+        session_id=request.session_id
     )
 
     # Capturar traza N4 de input

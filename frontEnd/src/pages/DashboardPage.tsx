@@ -1,234 +1,330 @@
-/**
- * Dashboard Page - Vista principal con métricas y acceso rápido
- */
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { apiClient } from '../services/apiClient';
-import { StatCard, LoadingState, EmptyState } from '../components/ui';
-import './DashboardPage.css';
+import { useAuth } from '../contexts/AuthContext';
+import api from '../services/api';
+import { Session, HealthStatus } from '../types';
+import {
+  Sparkles,
+  MessageSquare,
+  Code,
+  Users,
+  TrendingUp,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+  ArrowRight,
+  Activity,
+  Brain,
+  Target,
+  Zap
+} from 'lucide-react';
 
-interface DashboardMetrics {
-  totalSessions: number;
-  activeSessions: number;
-  totalRisks: number;
-  totalTraces: number;
+interface StatCard {
+  title: string;
+  value: string | number;
+  change?: string;
+  changeType?: 'positive' | 'negative' | 'neutral';
+  icon: React.ElementType;
+  color: string;
 }
 
-export const DashboardPage: React.FC = () => {
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
-  const [recentSessions, setRecentSessions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function DashboardPage() {
+  const { user } = useAuth();
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadDashboardData();
-  }, []);
+    const fetchData = async () => {
+      try {
+        const [sessionsRes, healthRes] = await Promise.all([
+          api.getSessions(user?.id),
+          api.getHealth()
+        ]);
+        setSessions(sessionsRes.data || []);
+        setHealth(healthRes);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      
-      // Cargar sesiones recientes
-      const sessionsResponse = await apiClient.getSessions();
-      const sessions = sessionsResponse.data?.items || sessionsResponse.data || [];
-      
-      // Calcular métricas
-      const dashboardMetrics: DashboardMetrics = {
-        totalSessions: sessions.length,
-        activeSessions: sessions.filter((s: any) => s.status === 'active').length,
-        totalRisks: sessions.reduce((acc: number, s: any) => acc + (s.risk_count || 0), 0),
-        totalTraces: sessions.reduce((acc: number, s: any) => acc + (s.trace_count || 0), 0),
-      };
+    fetchData();
+  }, [user]);
 
-      setMetrics(dashboardMetrics);
-      setRecentSessions(sessions.slice(0, 5)); // Últimas 5 sesiones
-      
-    } catch (error) {
-      console.error('Error loading dashboard:', error);
-    } finally {
-      setLoading(false);
+  const activeSessions = sessions.filter(s => s.status === 'active').length;
+  const completedSessions = sessions.filter(s => s.status === 'completed').length;
+  const totalInteractions = sessions.reduce((acc, s) => acc + (s.trace_count || 0), 0);
+
+  const stats: StatCard[] = [
+    {
+      title: 'Sesiones Activas',
+      value: activeSessions,
+      change: '+2 esta semana',
+      changeType: 'positive',
+      icon: Activity,
+      color: 'from-green-500 to-emerald-600'
+    },
+    {
+      title: 'Sesiones Completadas',
+      value: completedSessions,
+      change: `${sessions.length} total`,
+      changeType: 'neutral',
+      icon: CheckCircle,
+      color: 'from-blue-500 to-cyan-600'
+    },
+    {
+      title: 'Interacciones',
+      value: totalInteractions,
+      change: 'Con tutor IA',
+      changeType: 'neutral',
+      icon: MessageSquare,
+      color: 'from-purple-500 to-pink-600'
+    },
+    {
+      title: 'Progreso General',
+      value: '78%',
+      change: '+5% este mes',
+      changeType: 'positive',
+      icon: TrendingUp,
+      color: 'from-orange-500 to-red-600'
     }
-  };
+  ];
 
-  if (loading) {
-    return <LoadingState type="skeleton" message="Cargando dashboard..." />;
+  const quickActions = [
+    {
+      title: 'Continuar Aprendiendo',
+      description: 'Retoma tu última sesión con el tutor IA',
+      icon: Brain,
+      path: '/tutor',
+      gradient: 'from-indigo-500 to-purple-600'
+    },
+    {
+      title: 'Practicar Código',
+      description: 'Resuelve ejercicios de programación',
+      icon: Code,
+      path: '/exercises',
+      gradient: 'from-green-500 to-emerald-600'
+    },
+    {
+      title: 'Simuladores',
+      description: 'Practica con roles profesionales',
+      icon: Users,
+      path: '/simulators',
+      gradient: 'from-orange-500 to-pink-600'
+    }
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600 mt-2">Resumen de tu actividad de aprendizaje</p>
-      </div>
-
-      {/* Métricas Principales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          label="Sesiones Totales"
-          value={metrics?.totalSessions || 0}
-          icon="📊"
-          color="blue"
-        />
-        <StatCard
-          label="Sesiones Activas"
-          value={metrics?.activeSessions || 0}
-          icon="🟢"
-          color="green"
-        />
-        <StatCard
-          label="Riesgos Detectados"
-          value={metrics?.totalRisks || 0}
-          icon="⚠️"
-          color="orange"
-        />
-        <StatCard
-          label="Trazas Cognitivas"
-          value={metrics?.totalTraces || 0}
-          icon="🧠"
-          color="purple"
-        />
-      </div>
-
-      {/* Acciones Rápidas */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Acciones Rápidas</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link
-            to="/tutor"
-            className="flex items-center p-4 border-2 border-blue-200 rounded-lg hover:bg-blue-50 transition-colors group"
-          >
-            <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-              💬
-            </div>
-            <div className="ml-4">
-              <h3 className="font-semibold text-gray-900">Nueva Sesión Tutor</h3>
-              <p className="text-sm text-gray-600">Aprende con el tutor IA</p>
-            </div>
-          </Link>
-
-          <Link
-            to="/simulators"
-            className="flex items-center p-4 border-2 border-green-200 rounded-lg hover:bg-green-50 transition-colors group"
-          >
-            <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-              🎯
-            </div>
-            <div className="ml-4">
-              <h3 className="font-semibold text-gray-900">Continuar Simulador</h3>
-              <p className="text-sm text-gray-600">Practica con profesionales</p>
-            </div>
-          </Link>
-
-          <Link
-            to="/test"
-            className="flex items-center p-4 border-2 border-purple-200 rounded-lg hover:bg-purple-50 transition-colors group"
-          >
-            <div className="flex-shrink-0 w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-              🧪
-            </div>
-            <div className="ml-4">
-              <h3 className="font-semibold text-gray-900">Ejecutar Pruebas</h3>
-              <p className="text-sm text-gray-600">Valida el sistema completo</p>
-            </div>
-          </Link>
+    <div className="space-y-8 animate-fadeIn">
+      {/* Welcome Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
+            ¡Bienvenido, {user?.full_name || user?.username}! 👋
+          </h1>
+          <p className="text-[var(--text-secondary)]">
+            Continúa tu viaje de aprendizaje con inteligencia artificial
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm ${
+            health?.status === 'healthy' 
+              ? 'bg-green-500/10 text-green-500' 
+              : 'bg-yellow-500/10 text-yellow-500'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${
+              health?.status === 'healthy' ? 'bg-green-500' : 'bg-yellow-500'
+            } animate-pulse`}></span>
+            Sistema {health?.status === 'healthy' ? 'Online' : 'Degradado'}
+          </div>
         </div>
       </div>
 
-      {/* Actividad Reciente */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">Actividad Reciente</h2>
-            <Link to="/sessions" className="text-blue-600 hover:text-blue-700 text-sm font-medium">
-              Ver todas →
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat, index) => (
+          <div 
+            key={index}
+            className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] p-6 hover:border-[var(--border-light)] transition-all duration-300 group"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
+                <stat.icon className="w-6 h-6 text-white" />
+              </div>
+              {stat.change && (
+                <span className={`text-xs px-2 py-1 rounded-full ${
+                  stat.changeType === 'positive' ? 'bg-green-500/10 text-green-500' :
+                  stat.changeType === 'negative' ? 'bg-red-500/10 text-red-500' :
+                  'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'
+                }`}>
+                  {stat.change}
+                </span>
+              )}
+            </div>
+            <h3 className="text-3xl font-bold text-[var(--text-primary)] mb-1">
+              {stat.value}
+            </h3>
+            <p className="text-sm text-[var(--text-secondary)]">{stat.title}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Quick Actions */}
+      <div>
+        <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-4">
+          Acciones Rápidas
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {quickActions.map((action, index) => (
+            <Link
+              key={index}
+              to={action.path}
+              className="group bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] p-6 hover:border-[var(--accent-primary)]/50 transition-all duration-300 hover:shadow-lg hover:shadow-[var(--accent-primary)]/10"
+            >
+              <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${action.gradient} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+                <action.icon className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2 group-hover:text-[var(--accent-primary)] transition-colors">
+                {action.title}
+              </h3>
+              <p className="text-sm text-[var(--text-secondary)] mb-4">
+                {action.description}
+              </p>
+              <div className="flex items-center text-[var(--accent-primary)] text-sm font-medium">
+                Comenzar
+                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-2 transition-transform" />
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Recent Sessions */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-[var(--text-primary)]">
+            Sesiones Recientes
+          </h2>
+          <Link 
+            to="/sessions" 
+            className="text-sm text-[var(--accent-primary)] hover:text-[var(--accent-secondary)] flex items-center gap-1"
+          >
+            Ver todas
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+
+        {sessions.length === 0 ? (
+          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] p-12 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-[var(--bg-tertiary)] flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="w-8 h-8 text-[var(--text-muted)]" />
+            </div>
+            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">
+              No hay sesiones aún
+            </h3>
+            <p className="text-[var(--text-secondary)] mb-6">
+              Comienza tu primera sesión con el tutor IA
+            </p>
+            <Link
+              to="/tutor"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-medium hover:opacity-90 transition-opacity"
+            >
+              <MessageSquare className="w-5 h-5" />
+              Iniciar Sesión
             </Link>
           </div>
-        </div>
-        
-        <div className="p-6">
-          {recentSessions.length === 0 ? (
-            <EmptyState
-              icon="📋"
-              title="No hay sesiones todavía"
-              description="Crea tu primera sesión para comenzar a aprender"
-              action={
-                <Link
-                  to="/sessions"
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Crear Sesión
-                </Link>
-              }
-            />
-          ) : (
-            <div className="space-y-3">
-              {recentSessions.map((session: any) => (
-                <div
-                  key={session.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-xl">
-                      {session.mode === 'TUTOR' ? '💬' : '🎯'}
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">
+        ) : (
+          <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[var(--border-color)]">
+                  <th className="px-6 py-4 text-left text-sm font-medium text-[var(--text-muted)]">Actividad</th>
+                  <th className="px-6 py-4 text-left text-sm font-medium text-[var(--text-muted)]">Modo</th>
+                  <th className="px-6 py-4 text-left text-sm font-medium text-[var(--text-muted)]">Estado</th>
+                  <th className="px-6 py-4 text-left text-sm font-medium text-[var(--text-muted)]">Interacciones</th>
+                  <th className="px-6 py-4 text-left text-sm font-medium text-[var(--text-muted)]">Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.slice(0, 5).map((session) => (
+                  <tr 
+                    key={session.id} 
+                    className="border-b border-[var(--border-color)] hover:bg-[var(--bg-hover)] transition-colors"
+                  >
+                    <td className="px-6 py-4">
+                      <span className="text-[var(--text-primary)] font-medium">
                         {session.activity_id}
-                      </h3>
-                      <p className="text-sm text-gray-500">
-                        {new Date(session.created_at).toLocaleDateString('es-ES', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="text-right">
-                      <div className="text-sm text-gray-600">
-                        {session.trace_count || 0} trazas
-                      </div>
-                      {session.risk_count > 0 && (
-                        <div className="text-sm text-orange-600">
-                          {session.risk_count} riesgos
-                        </div>
-                      )}
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      session.status === 'active' 
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {session.status === 'active' ? 'Activa' : 'Completada'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                        session.mode === 'TUTOR' ? 'bg-purple-500/10 text-purple-400' :
+                        session.mode === 'SIMULATOR' ? 'bg-blue-500/10 text-blue-400' :
+                        'bg-green-500/10 text-green-400'
+                      }`}>
+                        {session.mode === 'TUTOR' && <Brain className="w-3 h-3" />}
+                        {session.mode === 'SIMULATOR' && <Users className="w-3 h-3" />}
+                        {session.mode === 'PRACTICE' && <Target className="w-3 h-3" />}
+                        {session.mode}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                        session.status === 'active' ? 'bg-green-500/10 text-green-400' :
+                        session.status === 'completed' ? 'bg-blue-500/10 text-blue-400' :
+                        'bg-yellow-500/10 text-yellow-400'
+                      }`}>
+                        {session.status === 'active' && <Zap className="w-3 h-3" />}
+                        {session.status === 'completed' && <CheckCircle className="w-3 h-3" />}
+                        {session.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-[var(--text-secondary)]">
+                        {session.trace_count}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-[var(--text-muted)] text-sm">
+                        {new Date(session.created_at).toLocaleDateString()}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* Test Suite Banner */}
-      <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg shadow-lg p-6 text-white">
-        <div className="flex items-center justify-between">
+      {/* AI Tips */}
+      <div className="bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 rounded-2xl border border-[var(--accent-primary)]/20 p-6">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+            <Sparkles className="w-6 h-6 text-white" />
+          </div>
           <div>
-            <h2 className="text-2xl font-bold mb-2">🧪 Suite de Pruebas Completa</h2>
-            <p className="text-green-100">
-              Valida todas las funcionalidades: Tutor, 6 Simuladores, Riesgos, Evaluaciones y más
+            <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
+              💡 Consejo del Tutor IA
+            </h3>
+            <p className="text-[var(--text-secondary)]">
+              Recuerda que el tutor IA está diseñado para guiarte, no para darte las respuestas directamente. 
+              Intenta formular tus dudas de manera específica y explica tu razonamiento. 
+              Así el tutor podrá ayudarte a desarrollar tu pensamiento crítico.
             </p>
           </div>
-          <Link
-            to="/test"
-            className="bg-white text-green-600 px-6 py-3 rounded-lg font-semibold hover:bg-green-50 transition-colors whitespace-nowrap"
-          >
-            Ejecutar Pruebas →
-          </Link>
         </div>
       </div>
     </div>
   );
-};
+}

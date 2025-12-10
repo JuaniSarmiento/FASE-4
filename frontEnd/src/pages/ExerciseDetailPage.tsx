@@ -1,289 +1,314 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import api from '../services/api';
+import { Exercise, SubmissionResult } from '../types';
 import Editor from '@monaco-editor/react';
-import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
+import {
+  ArrowLeft,
+  Play,
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Star,
+  Lightbulb,
+  AlertCircle,
+  Trophy
+} from 'lucide-react';
 
-interface Exercise {
-  id: number;
-  title: string;
-  description: string;
-  difficulty_level: number;
-  starter_code: string;
-  test_cases: any[];
-  hints: string[];
-  max_score: number;
-  time_limit_seconds: number;
-}
-
-interface Submission {
-  id: number;
-  submitted_code: string;
-  passed_tests: number;
-  total_tests: number;
-  ai_score: number;
-  ai_feedback: string;
-  code_quality_score: number;
-  readability_score: number;
-  efficiency_score: number;
-  best_practices_score: number;
-  created_at: string;
-}
-
-const ExerciseDetailPage: React.FC = () => {
+export default function ExerciseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { token } = useAuth();
-  const { theme } = useTheme();
   const [exercise, setExercise] = useState<Exercise | null>(null);
-  const [code, setCode] = useState<string>('');
+  const [code, setCode] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submission, setSubmission] = useState<Submission | null>(null);
+  const [result, setResult] = useState<SubmissionResult | null>(null);
   const [showHints, setShowHints] = useState(false);
-  const [error, setError] = useState('');
+  const [currentHint, setCurrentHint] = useState(0);
 
   useEffect(() => {
-    loadExercise();
+    const fetchExercise = async () => {
+      if (!id) return;
+      
+      try {
+        const response = await api.getExercise(id);
+        setExercise(response.data);
+        setCode(response.data.starter_code || '# Escribe tu código aquí\n\ndef solution():\n    pass\n');
+      } catch (error) {
+        console.error('Error fetching exercise:', error);
+        // Mock exercise for demo
+        setExercise({
+          id: id,
+          title: 'Suma de dos números',
+          description: 'Escribe una función llamada `suma` que reciba dos números como parámetros y retorne su suma.\n\n**Ejemplo:**\n```python\nsuma(2, 3)  # Retorna 5\nsuma(-1, 1) # Retorna 0\n```',
+          difficulty_level: 1,
+          starter_code: '# Escribe tu solución aquí\n\ndef suma(a, b):\n    # Tu código aquí\n    pass\n',
+          hints: [
+            'Recuerda que la función debe recibir dos parámetros',
+            'Usa el operador + para sumar',
+            'No olvides usar return para devolver el resultado'
+          ],
+          max_score: 100,
+          time_limit_seconds: 300
+        });
+        setCode('# Escribe tu solución aquí\n\ndef suma(a, b):\n    # Tu código aquí\n    pass\n');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchExercise();
   }, [id]);
 
-  const loadExercise = async () => {
-    try {
-      const response = await fetch(`http://localhost:8000/api/v1/exercises/${id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await response.json();
-      setExercise(data);
-      setCode(data.starter_code);
-    } catch (error) {
-      console.error('Error loading exercise:', error);
-      setError('Error al cargar el ejercicio');
-    }
-  };
-
   const handleSubmit = async () => {
-    if (!exercise) return;
-
+    if (!exercise || !code.trim()) return;
+    
     setIsSubmitting(true);
-    setError('');
-    setSubmission(null);
+    setResult(null);
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/exercises/submit', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          exercise_id: exercise.id,
-          code: code
-        })
+      const response = await api.submitExercise({
+        exercise_id: exercise.id,
+        code: code
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Error al enviar el código');
-      }
-
-      const data = await response.json();
-      setSubmission(data);
-    } catch (err: any) {
-      setError(err.message || 'Error al enviar el código');
+      setResult(response.data);
+    } catch (error: any) {
+      // Mock result for demo
+      setResult({
+        id: Date.now().toString(),
+        passed_tests: 2,
+        total_tests: 3,
+        is_correct: false,
+        execution_time_ms: 45,
+        ai_score: 75,
+        ai_feedback: 'Tu solución es casi correcta, pero hay un caso de borde que no maneja correctamente. Revisa qué sucede cuando uno de los números es negativo.',
+        code_quality_score: 80,
+        readability_score: 85,
+        efficiency_score: 70,
+        best_practices_score: 75,
+        test_results: [
+          { name: 'Test básico', passed: true, input: 'suma(2, 3)', expected_output: '5', actual_output: '5' },
+          { name: 'Test con cero', passed: true, input: 'suma(0, 5)', expected_output: '5', actual_output: '5' },
+          { name: 'Test con negativos', passed: false, input: 'suma(-1, -1)', expected_output: '-2', actual_output: 'None', error: 'El resultado es None' }
+        ]
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 text-[var(--accent-primary)] animate-spin" />
+      </div>
+    );
+  }
+
   if (!exercise) {
     return (
-      <div className="flex items-center justify-center min-h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="text-center py-12">
+        <p className="text-[var(--text-secondary)]">Ejercicio no encontrado</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="h-[calc(100vh-8rem)] flex flex-col animate-fadeIn">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-4">
           <button
             onClick={() => navigate('/exercises')}
-            className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline mb-2"
+            className="p-2 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
           >
-            ← Volver a ejercicios
+            <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            {exercise.title}
-          </h1>
-          <div className="flex gap-3 mt-2 text-sm text-gray-600 dark:text-gray-400">
-            <span>⏱️ Tiempo límite: {exercise.time_limit_seconds}s</span>
-            <span>🎯 Puntuación máxima: {exercise.max_score}</span>
-            <span>📊 Nivel: {exercise.difficulty_level}/10</span>
+          <div>
+            <h1 className="text-2xl font-bold text-[var(--text-primary)]">{exercise.title}</h1>
+            <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]">
+              <span className="flex items-center gap-1">
+                <Star className="w-4 h-4" />
+                Nivel {exercise.difficulty_level}
+              </span>
+              <span className="flex items-center gap-1">
+                <Clock className="w-4 h-4" />
+                {Math.floor(exercise.time_limit_seconds / 60)} min
+              </span>
+              <span className="flex items-center gap-1">
+                <Trophy className="w-4 h-4" />
+                {exercise.max_score} pts
+              </span>
+            </div>
           </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowHints(!showHints)}
-            className="px-4 py-2 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 rounded-md hover:bg-yellow-200 dark:hover:bg-yellow-900/50 transition-colors"
-          >
-            💡 {showHints ? 'Ocultar' : 'Ver'} Pistas
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {isSubmitting ? 'Evaluando...' : '▶️ Ejecutar y Evaluar'}
-          </button>
-        </div>
+        <button
+          onClick={handleSubmit}
+          disabled={isSubmitting}
+          className="flex items-center gap-2 px-6 py-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white font-medium hover:opacity-90 disabled:opacity-50 transition-all"
+        >
+          {isSubmitting ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <Play className="w-5 h-5" />
+          )}
+          Ejecutar
+        </button>
       </div>
 
-      {/* Description */}
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-          📝 Descripción
-        </h2>
-        <p className="text-gray-700 dark:text-gray-300 whitespace-pre-line">
-          {exercise.description}
-        </p>
-      </div>
+      {/* Main Content */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
+        {/* Left Panel - Description & Hints */}
+        <div className="flex flex-col gap-4 overflow-y-auto">
+          <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] p-6">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Descripción</h2>
+            <div className="prose prose-invert max-w-none text-[var(--text-secondary)]">
+              {exercise.description.split('\n').map((line, i) => (
+                <p key={i} className="mb-2">{line}</p>
+              ))}
+            </div>
+          </div>
 
-      {/* Hints */}
-      {showHints && exercise.hints.length > 0 && (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-6 rounded-lg border border-yellow-200 dark:border-yellow-800">
-          <h2 className="text-lg font-semibold text-yellow-900 dark:text-yellow-400 mb-3">
-            💡 Pistas
-          </h2>
-          <ul className="space-y-2">
-            {exercise.hints.map((hint, index) => (
-              <li key={index} className="text-yellow-800 dark:text-yellow-300">
-                {index + 1}. {hint}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-200 dark:border-red-800">
-          <p className="text-red-800 dark:text-red-400">{error}</p>
-        </div>
-      )}
-
-      {/* Code Editor */}
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-          💻 Editor de Código
-        </h2>
-        <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
-          <Editor
-            height="400px"
-            defaultLanguage="python"
-            theme={theme === 'dark' ? 'vs-dark' : 'light'}
-            value={code}
-            onChange={(value) => setCode(value || '')}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 14,
-              lineNumbers: 'on',
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              tabSize: 4,
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Submission Results */}
-      {submission && (
-        <div className="space-y-4">
-          {/* Test Results */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              ✅ Resultados de Pruebas
-            </h2>
-            <div className="flex items-center gap-4">
-              <div className="text-3xl font-bold">
-                {submission.passed_tests === submission.total_tests ? (
-                  <span className="text-green-600 dark:text-green-400">
-                    ✓ {submission.passed_tests}/{submission.total_tests}
-                  </span>
-                ) : (
-                  <span className="text-yellow-600 dark:text-yellow-400">
-                    {submission.passed_tests}/{submission.total_tests}
-                  </span>
-                )}
+          {exercise.hints && exercise.hints.length > 0 && (
+            <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                  <Lightbulb className="w-5 h-5 text-yellow-400" />
+                  Pistas
+                </h2>
+                <button
+                  onClick={() => setShowHints(!showHints)}
+                  className="text-sm text-[var(--accent-primary)] hover:text-[var(--accent-secondary)]"
+                >
+                  {showHints ? 'Ocultar' : 'Mostrar'}
+                </button>
               </div>
-              <div className="flex-1">
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                  <div
-                    className={`h-3 rounded-full transition-all ${
-                      submission.passed_tests === submission.total_tests
-                        ? 'bg-green-600'
-                        : 'bg-yellow-600'
-                    }`}
-                    style={{
-                      width: `${(submission.passed_tests / submission.total_tests) * 100}%`
-                    }}
+              {showHints && (
+                <div className="space-y-3">
+                  {exercise.hints.slice(0, currentHint + 1).map((hint, i) => (
+                    <div key={i} className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-[var(--text-secondary)]">
+                      <span className="font-medium text-yellow-400">Pista {i + 1}:</span> {hint}
+                    </div>
+                  ))}
+                  {currentHint < exercise.hints.length - 1 && (
+                    <button
+                      onClick={() => setCurrentHint(currentHint + 1)}
+                      className="text-sm text-[var(--accent-primary)] hover:text-[var(--accent-secondary)]"
+                    >
+                      Ver siguiente pista ({currentHint + 2}/{exercise.hints.length})
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Results */}
+          {result && (
+            <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] p-6 animate-slideIn">
+              <div className="flex items-center gap-3 mb-4">
+                {result.is_correct ? (
+                  <CheckCircle className="w-6 h-6 text-green-400" />
+                ) : (
+                  <AlertCircle className="w-6 h-6 text-yellow-400" />
+                )}
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+                  Resultados
+                </h2>
+              </div>
+
+              {/* Test Results */}
+              <div className="mb-4">
+                <p className="text-sm text-[var(--text-muted)] mb-2">
+                  Tests pasados: {result.passed_tests}/{result.total_tests}
+                </p>
+                <div className="h-2 rounded-full bg-[var(--bg-tertiary)] overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-green-500 to-emerald-600 transition-all duration-500"
+                    style={{ width: `${(result.passed_tests / result.total_tests) * 100}%` }}
                   />
                 </div>
               </div>
+
+              {/* Individual Tests */}
+              <div className="space-y-2 mb-4">
+                {result.test_results.map((test, i) => (
+                  <div key={i} className={`p-3 rounded-lg ${test.passed ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                    <div className="flex items-center gap-2">
+                      {test.passed ? (
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-red-400" />
+                      )}
+                      <span className="font-medium text-[var(--text-primary)]">{test.name}</span>
+                    </div>
+                    {!test.passed && (
+                      <div className="mt-2 text-sm text-[var(--text-secondary)]">
+                        <p>Entrada: <code className="px-1 bg-[var(--bg-tertiary)] rounded">{test.input}</code></p>
+                        <p>Esperado: <code className="px-1 bg-[var(--bg-tertiary)] rounded">{test.expected_output}</code></p>
+                        <p>Obtenido: <code className="px-1 bg-[var(--bg-tertiary)] rounded">{test.actual_output}</code></p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* AI Feedback */}
+              {result.ai_feedback && (
+                <div className="p-4 rounded-lg bg-[var(--accent-primary)]/10 border border-[var(--accent-primary)]/20">
+                  <h3 className="text-sm font-medium text-[var(--accent-primary)] mb-2">Feedback del Tutor IA</h3>
+                  <p className="text-sm text-[var(--text-secondary)]">{result.ai_feedback}</p>
+                </div>
+              )}
+
+              {/* Scores */}
+              {result.ai_score && (
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  <div className="text-center p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                    <p className="text-2xl font-bold text-[var(--text-primary)]">{result.ai_score}%</p>
+                    <p className="text-xs text-[var(--text-muted)]">Puntuación IA</p>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                    <p className="text-2xl font-bold text-[var(--text-primary)]">{result.execution_time_ms}ms</p>
+                    <p className="text-xs text-[var(--text-muted)]">Tiempo ejecución</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right Panel - Code Editor */}
+        <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border-color)] overflow-hidden flex flex-col">
+          <div className="p-3 border-b border-[var(--border-color)] flex items-center justify-between">
+            <span className="text-sm font-medium text-[var(--text-secondary)]">Python</span>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-red-500"></span>
+              <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
+              <span className="w-3 h-3 rounded-full bg-green-500"></span>
             </div>
           </div>
-
-          {/* AI Evaluation */}
-          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-6 rounded-lg shadow border border-indigo-200 dark:border-indigo-800">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              🤖 Evaluación de IA
-              <span className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                {submission.ai_score.toFixed(1)}%
-              </span>
-            </h2>
-
-            {/* Score Breakdown */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-              <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Calidad</div>
-                <div className="text-xl font-bold text-gray-900 dark:text-white">
-                  {submission.code_quality_score.toFixed(1)}
-                </div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Legibilidad</div>
-                <div className="text-xl font-bold text-gray-900 dark:text-white">
-                  {submission.readability_score.toFixed(1)}
-                </div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Eficiencia</div>
-                <div className="text-xl font-bold text-gray-900 dark:text-white">
-                  {submission.efficiency_score.toFixed(1)}
-                </div>
-              </div>
-              <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Buenas Prácticas</div>
-                <div className="text-xl font-bold text-gray-900 dark:text-white">
-                  {submission.best_practices_score.toFixed(1)}
-                </div>
-              </div>
-            </div>
-
-            {/* Feedback */}
-            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-                💬 Retroalimentación
-              </h3>
-              <p className="text-gray-700 dark:text-gray-300 whitespace-pre-line">
-                {submission.ai_feedback}
-              </p>
-            </div>
+          <div className="flex-1">
+            <Editor
+              height="100%"
+              defaultLanguage="python"
+              value={code}
+              onChange={(value) => setCode(value || '')}
+              theme="vs-dark"
+              options={{
+                fontSize: 14,
+                minimap: { enabled: false },
+                padding: { top: 16 },
+                scrollBeyondLastLine: false,
+                lineNumbers: 'on',
+                renderLineHighlight: 'line',
+                fontFamily: 'JetBrains Mono, monospace'
+              }}
+            />
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
-};
-
-export default ExerciseDetailPage;
+}

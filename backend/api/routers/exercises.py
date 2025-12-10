@@ -158,8 +158,7 @@ RESPONDE SOLO CON EL JSON, SIN TEXTO ADICIONAL."""
 @router.get("", response_model=List[ExerciseResponse])
 async def list_exercises(
     difficulty: Optional[int] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Lista todos los ejercicios disponibles"""
     query = db.query(Exercise)
@@ -219,8 +218,7 @@ async def get_user_stats(
 @router.get("/{exercise_id}", response_model=ExerciseResponse)
 async def get_exercise(
     exercise_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Obtiene un ejercicio específico"""
     exercise = db.query(Exercise).filter(Exercise.id == exercise_id).first()
@@ -243,8 +241,7 @@ async def get_exercise(
 @router.post("/submit", response_model=SubmissionResult)
 async def submit_code(
     submission: CodeSubmission,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Envía código para evaluación"""
     # Obtener ejercicio
@@ -292,9 +289,9 @@ async def submit_code(
         {"passed": passed_tests, "total": total_tests}
     )
     
-    # Guardar submission
+    # Guardar submission (sin autenticación usar user_id genérico)
     new_submission = UserExerciseSubmission(
-        user_id=current_user.id,
+        user_id="anonymous",  # TODO: Implementar autenticación
         exercise_id=exercise.id,
         submitted_code=submission.code,
         passed_tests=passed_tests,

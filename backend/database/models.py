@@ -42,6 +42,9 @@ class SessionDB(Base, BaseModel):
     """
     Database model for learning sessions
 
+    IMPORTANTE: Incluye metadatos de Objetivo de Aprendizaje y Estado Cognitivo
+    para cumplir con los requisitos de Trazabilidad N4.
+
     IMPORTANT: user_id is nullable to support:
     1. Anonymous sessions (guest users without authentication)
     2. Legacy data (sessions created before user authentication was implemented)
@@ -76,6 +79,37 @@ class SessionDB(Base, BaseModel):
     start_time = Column(DateTime, default=_utc_now, nullable=False)
     end_time = Column(DateTime, nullable=True)
     status = Column(String(20), default="active")  # active, completed, abandoned
+
+    # === TRAZABILIDAD N4: METADATOS DE SESIÓN ===
+    
+    # Objetivo de Aprendizaje de esta sesión
+    learning_objective = Column(JSONBCompatible, default=dict, nullable=True)
+    # {
+    #   "title": "Implementar estructura de datos Cola",
+    #   "description": "Comprender y aplicar el concepto de FIFO",
+    #   "expected_competencies": ["abstraccion", "implementacion", "testing"],
+    #   "difficulty_level": "intermediate"
+    # }
+    
+    # Estado Cognitivo del alumno (actualizado dinámicamente)
+    cognitive_status = Column(JSONBCompatible, default=dict, nullable=True)
+    # {
+    #   "current_phase": "exploration|planning|implementation|debugging|validation|reflection",
+    #   "autonomy_level": 0.0-1.0,  # Nivel de autonomía actual
+    #   "engagement_score": 0.0-1.0,  # Nivel de engagement
+    #   "cognitive_load": "low|medium|high|overload",  # Carga cognitiva estimada
+    #   "last_updated": "timestamp"
+    # }
+    
+    # Métricas agregadas de la sesión (calculadas al finalizar)
+    session_metrics = Column(JSONBCompatible, default=dict, nullable=True)
+    # {
+    #   "total_interactions": 15,
+    #   "ai_dependency_score": 0.65,
+    #   "risk_events": 3,
+    #   "autonomy_progression": [0.3, 0.5, 0.7],  # Evolución
+    #   "competencies_demonstrated": ["abstraccion", "debugging"]
+    # }
 
     # Relationships
     user = relationship("UserDB", back_populates="sessions")  # NEW
@@ -131,7 +165,7 @@ class CognitiveTraceDB(Base, BaseModel):
     context = Column(JSON, default=dict)
     trace_metadata = Column(JSON, default=dict)  # NOTE: Use trace_metadata, NOT metadata (SQLAlchemy reserved word)
 
-    # N4 Cognitive analysis
+    # N4 Cognitive analysis - 6 DIMENSIONES DE TRAZABILIDAD
     cognitive_state = Column(String(50), nullable=True)  # CognitiveState
     cognitive_intent = Column(String(200), nullable=True)
     decision_justification = Column(Text, nullable=True)
@@ -140,6 +174,66 @@ class CognitiveTraceDB(Base, BaseModel):
 
     # AI involvement
     ai_involvement = Column(Float, default=0.0)  # 0.0 to 1.0
+
+    # === LAS 6 DIMENSIONES DE TRAZABILIDAD N4 (Tesis) ===
+    
+    # 1. DIMENSIÓN SEMÁNTICA: ¿Qué entendió el alumno?
+    semantic_understanding = Column(JSONBCompatible, default=dict, nullable=True)
+    # {
+    #   "problem_interpretation": "string",  # Interpretación del problema
+    #   "key_concepts_identified": ["concept1", "concept2"],  # Conceptos identificados
+    #   "misconceptions_detected": ["misconception1"],  # Malentendidos detectados
+    #   "understanding_level": "superficial|partial|profundo"
+    # }
+    
+    # 2. DIMENSIÓN ALGORÍTMICA: Evolución del código y alternativas
+    algorithmic_evolution = Column(JSONBCompatible, default=dict, nullable=True)
+    # {
+    #   "code_versions": [{"version": 1, "code": "...", "timestamp": "..."}],
+    #   "alternatives_explored": ["approach1", "approach2"],
+    #   "design_decisions": [{"decision": "...", "rationale": "..."}],
+    #   "complexity_analysis": "O(n) vs O(n^2) - eligió O(n)"
+    # }
+    
+    # 3. DIMENSIÓN COGNITIVA: Razonamientos explícitos y justificaciones
+    cognitive_reasoning = Column(JSONBCompatible, default=dict, nullable=True)
+    # {
+    #   "explicit_reasoning": "string",  # Razonamiento explicitado por el alumno
+    #   "metacognitive_awareness": "high|medium|low",  # Conciencia metacognitiva
+    #   "problem_decomposition": ["subproblem1", "subproblem2"],
+    #   "strategy_justification": "Por qué eligió esta estrategia"
+    # }
+    
+    # 4. DIMENSIÓN INTERACCIONAL: Prompts usados y tipo de intervención de IA
+    interactional_data = Column(JSONBCompatible, default=dict, nullable=True)
+    # {
+    #   "prompt_type": "clarification|delegation|exploration|validation",
+    #   "prompt_quality_score": 0.0-1.0,  # Calidad del prompt
+    #   "ai_response_type": "socratic|explanatory|hint|code_sample",
+    #   "interaction_depth": "superficial|elaborated|deep",
+    #   "student_agency": 0.0-1.0  # Qué tanto lideró el alumno
+    # }
+    
+    # 5. DIMENSIÓN ÉTICA/RIESGO: Detección de sesgos o intentos de fraude
+    ethical_risk_data = Column(JSONBCompatible, default=dict, nullable=True)
+    # {
+    #   "plagiarism_indicators": ["indicator1"],  # Indicadores de plagio
+    #   "delegation_attempts": 3,  # Intentos de delegación total
+    #   "academic_integrity_score": 0.0-1.0,
+    #   "bias_detected": ["bias_type1"],  # Sesgos detectados en código/razonamiento
+    #   "ethical_concerns": ["concern1"]
+    # }
+    
+    # 6. DIMENSIÓN PROCESUAL: Tiempos y secuencia lógica
+    process_data = Column(JSONBCompatible, default=dict, nullable=True)
+    # {
+    #   "time_to_response": 123.45,  # Segundos hasta responder
+    #   "sequence_position": 5,  # Posición en la secuencia
+    #   "phase": "exploration|planning|implementation|debugging|validation",
+    #   "process_efficiency": 0.0-1.0,  # Eficiencia del proceso
+    #   "backtracking_count": 2,  # Veces que retrocedió
+    #   "iteration_cycle": "plan->code->test->refine"
+    # }
 
     # Relationships
     session = relationship("SessionDB", back_populates="traces")

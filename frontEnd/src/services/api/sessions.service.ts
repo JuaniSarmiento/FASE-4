@@ -112,6 +112,65 @@ class SessionsService extends BaseApiService {
   async remove(sessionId: string): Promise<void> {
     return this.delete<void>(`/${sessionId}`);
   }
+
+  /**
+   * Crear sesión de tutor socrático V2.0
+   * @returns SessionResponse con session_id y mensaje de bienvenida
+   */
+  async createTutor(): Promise<{ session_id: string; welcome_message: string }> {
+    return this.post<{ session_id: string; welcome_message: string }>('/create-tutor');
+  }
+
+  /**
+   * Interactuar con el tutor socrático V2.0
+   * @param sessionId - ID de la sesión
+   * @param message - Mensaje del estudiante
+   * @param studentProfile - Perfil actual del estudiante
+   * @returns Respuesta del tutor con metadata V2.0
+   */
+  async interact(
+    sessionId: string,
+    message: string,
+    studentProfile: {
+      avg_ai_involvement: number;
+      successful_autonomous_solutions: number;
+      error_self_correction_rate: number;
+    }
+  ): Promise<{
+    response: string;
+    metadata: {
+      intervention_type?: string;
+      semaforo?: 'verde' | 'amarillo' | 'rojo';
+      help_level?: string;
+      requires_student_response?: boolean;
+      cognitive_events?: string[];
+      rule_violations?: string[];
+    };
+  }> {
+    return this.post<any, any>(`/${sessionId}/interact`, {
+      message,
+      student_profile: studentProfile,
+    });
+  }
+
+  /**
+   * Obtener analytics N4 de la sesión
+   * @param sessionId - ID de la sesión
+   * @returns Estadísticas completas de la sesión
+   */
+  async getAnalyticsN4(sessionId: string): Promise<{
+    total_messages: number;
+    semaforo_distribution: {
+      verde: number;
+      amarillo: number;
+      rojo: number;
+    };
+    intervention_types: Record<string, number>;
+    cognitive_events: string[];
+    student_progression: any;
+  }> {
+    return this.get<any>(`/${sessionId}/analytics-n4`);
+  }
 }
 
 // Export singleton instance

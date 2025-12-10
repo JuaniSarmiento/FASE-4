@@ -6,7 +6,9 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import type { APIResponse, APIError } from '@/types/api.types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+// En desarrollo usa el proxy de Vite (/api), en producción usa la URL completa
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+  (import.meta.env.DEV ? '/api/v1' : 'http://localhost:8000/api/v1');
 
 // Crear instancia de axios
 const apiClient: AxiosInstance = axios.create({

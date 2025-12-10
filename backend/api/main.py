@@ -32,8 +32,6 @@ from .routers.simulators import router as simulators_router
 from .routers.cognitive_path import router as cognitive_path_router
 from .routers.teacher_tools import router as teacher_tools_router
 from .routers.admin_llm import router as admin_llm_router
-# Production Readiness - Authentication
-from .routers.auth import router as auth_router
 # Sprint 5 - Git N2 + Analytics + Risk Management
 from .routers.git_traces import router as git_traces_router
 from .routers.reports import router as reports_router
@@ -289,9 +287,6 @@ app.include_router(traces_router, prefix=API_V1_PREFIX)
 app.include_router(risks_router, prefix=API_V1_PREFIX)
 app.include_router(activities_router, prefix=API_V1_PREFIX)
 
-# Production Readiness - Authentication (DISABLED - usando auth_new_router)
-# app.include_router(auth_router, prefix=API_V1_PREFIX)
-
 # Sprint 3 - Nuevos routers
 app.include_router(simulators_router, prefix=API_V1_PREFIX)
 app.include_router(cognitive_path_router, prefix=API_V1_PREFIX)
@@ -318,7 +313,14 @@ app.include_router(events_router, prefix=API_V1_PREFIX)
 app.include_router(exercises_router, prefix=API_V1_PREFIX)
 app.include_router(auth_new_router, prefix=API_V1_PREFIX)
 
-logger.info(f"Routers registered with prefix: {API_V1_PREFIX} (21 routers total, including FASE 3.1 + auth_new)")
+# FASE 3.2 - Nuevos componentes de UI y Trazabilidad N4 Completa
+from .routers.cognitive_status import router as cognitive_status_router
+from .routers.simulators_enhanced import router as simulators_enhanced_router
+
+app.include_router(cognitive_status_router, prefix=API_V1_PREFIX)
+app.include_router(simulators_enhanced_router, prefix=API_V1_PREFIX)
+
+logger.info(f"Routers registered with prefix: {API_V1_PREFIX} (23 routers total, including FASE 3.2)")
 logger.info("Prometheus metrics endpoint: /metrics")
 
 

@@ -1,21 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
-import { Layout } from './components/Layout';
+import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import ExercisesPage from './pages/ExercisesPage';
-import ExerciseDetailPage from './pages/ExerciseDetailPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { SessionsPage } from './pages/SessionsPage';
-import { SessionDetailPage } from './pages/SessionDetailPage';
-import { TutorPage } from './pages/TutorPage';
-import { SimulatorsPage } from './pages/SimulatorsPage';
-import { RisksPage } from './pages/RisksPage';
-import { EvaluationsPage } from './pages/EvaluationsPage';
-import { TraceabilityPage } from './pages/TraceabilityPage';
-import { GitAnalyticsPage } from './pages/GitAnalyticsPage';
-import TestPageEnhanced from './pages/TestPageEnhanced';
+import DashboardPage from './pages/DashboardPage';
+import TutorPage from './pages/TutorPage';
+import ExercisesPageNew from './pages/ExercisesPageNew';
+import SimulatorsPage from './pages/SimulatorsPage';
+import AnalyticsPage from './pages/AnalyticsPage';
 
 function App() {
   return (
@@ -35,19 +28,13 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<DashboardPage />} />
-            <Route path="sessions" element={<SessionsPage />} />
-            <Route path="sessions/:sessionId" element={<SessionDetailPage />} />
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
             <Route path="tutor" element={<TutorPage />} />
-            <Route path="exercises" element={<ExercisesPage />} />
-            <Route path="exercises/:id" element={<ExerciseDetailPage />} />
+            <Route path="exercises" element={<ExercisesPageNew />} />
             <Route path="simulators" element={<SimulatorsPage />} />
-            <Route path="risks" element={<RisksPage />} />
-            <Route path="evaluations" element={<EvaluationsPage />} />
-            <Route path="traceability" element={<TraceabilityPage />} />
-            <Route path="analytics" element={<GitAnalyticsPage />} />
-            <Route path="test" element={<TestPageEnhanced />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>
